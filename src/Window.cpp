@@ -14,10 +14,11 @@ VulkanWindow::VulkanWindow(vk::raii::Context& context)
 	, m_DebugMessengerFactory(std::make_unique<DebugMessengerFactory>())
 	, m_LogicalDeviceFactory(std::make_unique<LogicalDeviceFactory>())
 	, m_SwapChainFactory(std::make_unique<SwapChainFactory>())
-// Vulkan
+	, m_Renderer(std::make_unique<Renderer>())
+	// Vulkan
 	, m_Context(std::move(context))
-{
 
+{
 }
 
 VulkanWindow::~VulkanWindow()
@@ -34,7 +35,7 @@ void VulkanWindow::MainLoop() const
 	while (!glfwWindowShouldClose(m_Window))
 	{
 		glfwPollEvents();
-		//DrawFrame();
+		DrawFrame();
 	}
 
 	//vkDeviceWaitIdle(LogicalDeviceFactory->m_Device);
@@ -85,11 +86,20 @@ void VulkanWindow::InitVulkan() {
 	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface,WIDTH,HEIGHT));
+	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
+	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
+
+	uint32_t QueueIdx = m_LogicalDeviceFactory->FindQueueFamilyIndex(*m_PhysicalDevice,m_Surface,vk::QueueFlagBits::eGraphics);
+
+	VkQueue rawQueue = *m_Device->getQueue(QueueIdx, 0);
+
+	m_GraphicsQueue = std::make_unique<vk::raii::Queue>(*m_Device,rawQueue);
+
 	m_Images = m_SwapChain->getImages();
 
 
-	for (const vk::Image& Image : m_Images) {
-		m_ImageViews.emplace_back(ImageFactory::CreateImageView(*m_Device,Image,m_SwapChainFactory->Format.format));
+	for (auto & Img : m_Images) {
+		m_ImageFrames.emplace_back(Img,*m_Device,m_SwapChainFactory->Format.format);
 	}
 
 	auto shaders = ShaderFactory::Build_Shader(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
@@ -97,6 +107,65 @@ void VulkanWindow::InitVulkan() {
 		m_Shaders.emplace_back(std::move(shader));
 	}
 
+	m_CmdPool = std::make_unique<vk::raii::CommandPool>(m_Renderer->CreateCommandPool(*m_Device, QueueIdx));
+
+	std::vector<vk::ShaderEXT> rawShaders;
+	rawShaders.reserve(m_Shaders.size());
+	for (const auto& shader : m_Shaders) {
+		rawShaders.push_back(*shader);
+	}
+
+	for (uint32_t i = 0; i < m_Images.size(); ++i) {
+		m_ImageFrames[i].SetCmdBuffer(
+			m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool), rawShaders, m_SwapChainFactory->Extent);
+	}
+
+
+}
+
+void VulkanWindow::DrawFrame() const {
+	vk::AcquireNextImageInfoKHR acquireInfo{};
+	acquireInfo.swapchain = **m_SwapChain;
+	acquireInfo.timeout = UINT64_MAX;
+	acquireInfo.semaphore = *m_ImageAvailableSemaphore;
+	acquireInfo.fence = nullptr;
+
+	auto acquireResult = m_Device->acquireNextImage2KHR(acquireInfo);
+
+	if (acquireResult.first != vk::Result::eSuccess &&
+		acquireResult.first != vk::Result::eSuboptimalKHR) {
+		throw std::runtime_error("Failed to acquire swap chain image!");
+		}
+
+	uint32_t imageIndex = acquireResult.second;
+
+	vk::SubmitInfo submitInfo{};
+	vk::Semaphore waitSemaphores[] = { *m_ImageAvailableSemaphore };
+	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &**(m_ImageFrames[imageIndex].m_CommandBuffer);
+
+	vk::Semaphore signalSemaphores[] = { *m_RenderFinishedSemaphore };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	m_GraphicsQueue->submit(submitInfo, nullptr);
+
+	vk::PresentInfoKHR presentInfo{};
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &**m_SwapChain;
+	presentInfo.pImageIndices = &imageIndex;
+
+	auto result = m_GraphicsQueue->presentKHR(presentInfo);
+
+	m_GraphicsQueue->waitIdle();
 
 }
 

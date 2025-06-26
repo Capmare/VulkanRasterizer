@@ -20,8 +20,9 @@ public:
 
 
     vk::raii::Device Build_Device(const vk::raii::PhysicalDevice& PhysicalDevice, vk::SurfaceKHR Surface);
-private:
     uint32_t FindQueueFamilyIndex(const vk::raii::PhysicalDevice& PhysicalDevice, vk::SurfaceKHR Surface, vk::QueueFlags QueueFlags);
+
+private:
 
 };
 

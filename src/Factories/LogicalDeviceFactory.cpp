@@ -44,8 +44,16 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
 
     vk::PhysicalDeviceFeatures PhysicalDeviceFeatures = {};
     vk::PhysicalDeviceShaderObjectFeaturesEXT ShaderObjectFeatures = {};
+    vk::PhysicalDeviceDynamicRenderingFeaturesKHR DynamicRenderingFeatures = {};
+
+
+    ShaderObjectFeatures.pNext = &DynamicRenderingFeatures; // chain next
+
     ShaderObjectFeatures.sType = vk::StructureType::ePhysicalDeviceShaderObjectFeaturesEXT;
     ShaderObjectFeatures.shaderObject = VK_TRUE;
+
+    DynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+
 
     std::vector<const char*> EnabledLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -53,7 +61,9 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
 
     std::vector<const char*> Extensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_EXT_SHADER_OBJECT_EXTENSION_NAME
+        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
     };
 
     vk::DeviceCreateInfo DeviceCreateInfo(
@@ -67,7 +77,7 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         &PhysicalDeviceFeatures
     );
 
-    DeviceCreateInfo.pNext = &ShaderObjectFeatures;
+    DeviceCreateInfo.pNext = &ShaderObjectFeatures; // chain next
 
     try {
         vk::raii::Device Device = PhysicalDevice.createDevice(DeviceCreateInfo);

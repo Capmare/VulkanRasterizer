@@ -24,3 +24,33 @@ vk::raii::ImageView ImageFactory::CreateImageView(const vk::raii::Device& device
 
     return device.createImageView(CreateInfo);
 }
+
+void ImageFactory::ShiftImageLayout(const vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout,
+    vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
+    vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
+
+
+    vk::ImageSubresourceRange access;
+    access.aspectMask = vk::ImageAspectFlagBits::eColor;
+    access.baseMipLevel = 0;
+    access.levelCount = 1;
+    access.baseArrayLayer = 0;
+    access.layerCount = 1;
+
+    vk::ImageMemoryBarrier barrier;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange = access;
+
+    vk::PipelineStageFlags sourceStage, destinationStage;
+
+    barrier.srcAccessMask = srcAccessMask;
+    barrier.dstAccessMask = dstAccessMask;
+
+    commandBuffer.pipelineBarrier(
+        srcStage, dstStage, vk::DependencyFlags(), nullptr, nullptr, barrier);
+
+}

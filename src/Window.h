@@ -16,7 +16,9 @@
 
 #include <memory>
 
+#include "ImageFrame.h"
 #include "PhysicalDevicePicker.h"
+#include "Renderer.h"
 #include "Factories/DebugMessengerFactory.h"
 #include "Factories/ImageFactory.h"
 #include "Factories/InstanceFactory.h"
@@ -27,9 +29,6 @@
 class VulkanWindow
 {
 public:
-
-
-
 
 	VulkanWindow(vk::raii::Context &context);
 
@@ -55,6 +54,9 @@ public:
 private:
 	void InitWindow();
 	void InitVulkan();
+
+	void DrawFrame() const;
+
 	void MainLoop() const;
 	void Cleanup() const;
 
@@ -66,13 +68,16 @@ private:
 	std::unique_ptr<DebugMessengerFactory> m_DebugMessengerFactory{};
 	std::unique_ptr<LogicalDeviceFactory> m_LogicalDeviceFactory{};
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
-
+	std::unique_ptr<Renderer> m_Renderer{};
 
 	std::unique_ptr<vk::raii::Instance> m_Instance{};
 	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger;
 	std::unique_ptr<vk::raii::PhysicalDevice> m_PhysicalDevice;
 	std::unique_ptr<vk::raii::Device> m_Device;
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain;
+	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue;
+	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore;
+	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore;
 
 
 	vk::SurfaceKHR m_Surface;
@@ -85,7 +90,10 @@ private:
 
 	std::vector<vk::raii::ShaderEXT> m_Shaders;
 
+	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 
+
+	std::vector<ImageFrame> m_ImageFrames;
 
 
 };

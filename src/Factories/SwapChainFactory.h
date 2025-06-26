@@ -33,6 +33,7 @@ public:
                                            height);
 
     vk::SurfaceFormatKHR Format{};
+    vk::Extent2D Extent{};
 
 private:
     SurfaceInfo Get_Surface_Info(const vk::raii::PhysicalDevice &physicalDevice, const vk::SurfaceKHR &surface);
@@ -40,7 +41,6 @@ private:
     vk::PresentModeKHR ChoosePresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
     vk::SurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
 
-    vk::Extent2D Extent{};
 
     uint32_t ImageCount{};
 };

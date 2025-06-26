@@ -18,6 +18,13 @@ public:
     ImageFactory& operator=(ImageFactory&&) noexcept = delete;
 
     static vk::raii::ImageView CreateImageView(const vk::raii::Device& device,vk::Image Image ,vk::Format Format);
+
+    static void ShiftImageLayout(
+        const vk::raii::CommandBuffer& commandBuffer, vk::Image image,
+    vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+    vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
+    vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage
+    );
 };
 
 
