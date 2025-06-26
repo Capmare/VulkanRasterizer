@@ -83,6 +83,8 @@ private:
 	bool m_bFrameBufferResized{ false };
 
 
+	std::vector<vk::raii::ShaderEXT> m_Shaders;
+
 
 
 

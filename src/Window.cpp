@@ -4,6 +4,8 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "Factories/ShaderFactory.h"
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 VulkanWindow::VulkanWindow(vk::raii::Context& context)
@@ -85,9 +87,17 @@ void VulkanWindow::InitVulkan() {
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface,WIDTH,HEIGHT));
 	m_Images = m_SwapChain->getImages();
 
+
 	for (const vk::Image& Image : m_Images) {
 		m_ImageViews.emplace_back(ImageFactory::CreateImageView(*m_Device,Image,m_SwapChainFactory->Format.format));
 	}
+
+	auto shaders = ShaderFactory::Build_Shader(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
+	for	(auto& shader : shaders) {
+		m_Shaders.emplace_back(std::move(shader));
+	}
+
+
 }
 
 
