@@ -7,6 +7,7 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include "ImageFrame.h"
 #include "vulkan/vulkan_raii.hpp"
 
 class Renderer {
@@ -19,11 +20,14 @@ public:
     Renderer& operator=(const Renderer&) = delete;
     Renderer& operator=(Renderer&&) noexcept = delete;
 
-
-    void Render();
-
     vk::raii::CommandPool CreateCommandPool(const vk::raii::Device& device, uint32_t queueFamilyIndex);
     vk::raii::CommandBuffer CreateCommandBuffer(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool);
+
+
+private:
+	std::vector<ImageFrame> m_ImageFrames;
+
+
 };
 
 

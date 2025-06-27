@@ -15,6 +15,7 @@ VulkanWindow::VulkanWindow(vk::raii::Context& context)
 	, m_LogicalDeviceFactory(std::make_unique<LogicalDeviceFactory>())
 	, m_SwapChainFactory(std::make_unique<SwapChainFactory>())
 	, m_Renderer(std::make_unique<Renderer>())
+
 	// Vulkan
 	, m_Context(std::move(context))
 
@@ -38,7 +39,7 @@ void VulkanWindow::MainLoop() const
 		DrawFrame();
 	}
 
-	//vkDeviceWaitIdle(LogicalDeviceFactory->m_Device);
+	m_GraphicsQueue->waitIdle();
 }
 
 void VulkanWindow::Cleanup() const {
@@ -88,6 +89,8 @@ void VulkanWindow::InitVulkan() {
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface,WIDTH,HEIGHT));
 	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
 	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
+	m_RenderFinishedFence = std::make_unique<vk::raii::Fence>(*m_Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
+
 
 	uint32_t QueueIdx = m_LogicalDeviceFactory->FindQueueFamilyIndex(*m_PhysicalDevice,m_Surface,vk::QueueFlagBits::eGraphics);
 
@@ -120,15 +123,20 @@ void VulkanWindow::InitVulkan() {
 			m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool), rawShaders, m_SwapChainFactory->Extent);
 	}
 
-
 }
 
 void VulkanWindow::DrawFrame() const {
+
+
+	vk::Result waitResult = m_Device->waitForFences({*m_RenderFinishedFence}, false, UINT64_MAX);
+	m_Device->resetFences({*m_RenderFinishedFence});
+
 	vk::AcquireNextImageInfoKHR acquireInfo{};
 	acquireInfo.swapchain = **m_SwapChain;
 	acquireInfo.timeout = UINT64_MAX;
 	acquireInfo.semaphore = *m_ImageAvailableSemaphore;
-	acquireInfo.fence = nullptr;
+	//acquireInfo.fence = *m_RenderFinishedFence;
+	acquireInfo.deviceMask = 1;
 
 	auto acquireResult = m_Device->acquireNextImage2KHR(acquireInfo);
 
@@ -154,7 +162,7 @@ void VulkanWindow::DrawFrame() const {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	m_GraphicsQueue->submit(submitInfo, nullptr);
+	m_GraphicsQueue->submit(submitInfo, **m_RenderFinishedFence);
 
 	vk::PresentInfoKHR presentInfo{};
 	presentInfo.waitSemaphoreCount = 1;
@@ -165,9 +173,9 @@ void VulkanWindow::DrawFrame() const {
 
 	auto result = m_GraphicsQueue->presentKHR(presentInfo);
 
-	m_GraphicsQueue->waitIdle();
 
 }
+
 
 
 

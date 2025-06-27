@@ -76,9 +76,11 @@ private:
 	std::unique_ptr<vk::raii::Device> m_Device;
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain;
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue;
+
+
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore;
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore;
-
+	std::unique_ptr<vk::raii::Fence> m_RenderFinishedFence;
 
 	vk::SurfaceKHR m_Surface;
 	std::vector<vk::Image> m_Images;

@@ -4,11 +4,12 @@
 
 #include "Renderer.h"
 
-void Renderer::Render() {
+#include <iostream>
+#include <ostream>
 
 
 
-}
+
 
 vk::raii::CommandPool Renderer::CreateCommandPool(const vk::raii::Device &device, uint32_t queueFamilyIndex) {
     vk::CommandPoolCreateInfo poolInfo = {};
