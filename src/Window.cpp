@@ -31,7 +31,7 @@ void VulkanWindow::FramebufferResizeCallback(GLFWwindow* window, int , int )
 	App->m_bFrameBufferResized = true;
 }
 
-void VulkanWindow::MainLoop() const
+void VulkanWindow::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_Window))
 	{
@@ -98,13 +98,6 @@ void VulkanWindow::InitVulkan() {
 
 	m_GraphicsQueue = std::make_unique<vk::raii::Queue>(*m_Device,rawQueue);
 
-	m_Images = m_SwapChain->getImages();
-
-
-	for (auto & Img : m_Images) {
-		m_ImageFrames.emplace_back(Img,*m_Device,m_SwapChainFactory->Format.format);
-	}
-
 	auto shaders = ShaderFactory::Build_Shader(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
 	for	(auto& shader : shaders) {
 		m_Shaders.emplace_back(std::move(shader));
@@ -112,20 +105,21 @@ void VulkanWindow::InitVulkan() {
 
 	m_CmdPool = std::make_unique<vk::raii::CommandPool>(m_Renderer->CreateCommandPool(*m_Device, QueueIdx));
 
-	std::vector<vk::ShaderEXT> rawShaders;
 	rawShaders.reserve(m_Shaders.size());
 	for (const auto& shader : m_Shaders) {
 		rawShaders.push_back(*shader);
 	}
+	m_Images = m_SwapChain->getImages();
+
+
 
 	for (uint32_t i = 0; i < m_Images.size(); ++i) {
-		m_ImageFrames[i].SetCmdBuffer(
-			m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool), rawShaders, m_SwapChainFactory->Extent);
+		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory->m_ImageViews,m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool));
 	}
 
 }
 
-void VulkanWindow::DrawFrame() const {
+void VulkanWindow::DrawFrame() {
 
 
 	vk::Result waitResult = m_Device->waitForFences({*m_RenderFinishedFence}, false, UINT64_MAX);
@@ -147,6 +141,7 @@ void VulkanWindow::DrawFrame() const {
 
 	uint32_t imageIndex = acquireResult.second;
 
+	m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_PhysicalDevice->getSurfaceCapabilitiesKHR(m_Surface).currentExtent,rawShaders);
 	vk::SubmitInfo submitInfo{};
 	vk::Semaphore waitSemaphores[] = { *m_ImageAvailableSemaphore };
 	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
@@ -156,7 +151,7 @@ void VulkanWindow::DrawFrame() const {
 	submitInfo.pWaitDstStageMask = waitStages;
 
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &**(m_ImageFrames[imageIndex].m_CommandBuffer);
+	submitInfo.pCommandBuffers = &*m_ImageFrames[imageIndex].m_CommandBuffer;
 
 	vk::Semaphore signalSemaphores[] = { *m_RenderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;

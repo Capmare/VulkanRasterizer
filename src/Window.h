@@ -55,9 +55,9 @@ private:
 	void InitWindow();
 	void InitVulkan();
 
-	void DrawFrame() const;
+	void DrawFrame();
 
-	void MainLoop() const;
+	void MainLoop();
 	void Cleanup() const;
 
 
@@ -91,6 +91,7 @@ private:
 
 
 	std::vector<vk::raii::ShaderEXT> m_Shaders;
+	std::vector<vk::ShaderEXT> rawShaders;
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 

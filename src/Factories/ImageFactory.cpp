@@ -25,9 +25,9 @@ vk::raii::ImageView ImageFactory::CreateImageView(const vk::raii::Device& device
     return device.createImageView(CreateInfo);
 }
 
-void ImageFactory::ShiftImageLayout(const vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout,
-    vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
-    vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
+void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, vk::Image image, vk::ImageLayout oldLayout,
+                                    vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
+                                    vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
 
 
     vk::ImageSubresourceRange access;

@@ -7,6 +7,8 @@
 #include <iostream>
 #include <ostream>
 
+#include "ImageFactory.h"
+
 vk::raii::SwapchainKHR SwapChainFactory::Build_SwapChain(const vk::raii::Device &logicalDevice,
                                                          const vk::raii::PhysicalDevice &physicalDevice, vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
@@ -37,7 +39,14 @@ vk::raii::SwapchainKHR SwapChainFactory::Build_SwapChain(const vk::raii::Device 
     SwapChainCreateInfo.clipped = VK_TRUE;
     SwapChainCreateInfo.oldSwapchain = vk::SwapchainKHR(nullptr);
 
-    return logicalDevice.createSwapchainKHR(SwapChainCreateInfo);
+    auto swapchain = logicalDevice.createSwapchainKHR(SwapChainCreateInfo);
+    std::vector<vk::Image> swapchainImages = swapchain.getImages();
+    for (uint32_t i = 0; i < ImageCount; i++) {
+        vk::raii::ImageView ImageView{ImageFactory::CreateImageView(logicalDevice,swapchainImages[i],Format.format)};
+        m_ImageViews.push_back(std::move(ImageView));
+    }
+
+    return swapchain;
 }
 
 SurfaceInfo SwapChainFactory::Get_Surface_Info(const vk::raii::PhysicalDevice &physicalDevice, const vk::SurfaceKHR &surface) {
