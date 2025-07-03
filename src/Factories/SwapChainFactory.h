@@ -36,6 +36,8 @@ public:
     vk::Extent2D Extent{};
 
     std::vector<vk::raii::ImageView> m_ImageViews;
+
+    bool bIsOutdated = false;
 private:
     SurfaceInfo Get_Surface_Info(const vk::raii::PhysicalDevice &physicalDevice, const vk::SurfaceKHR &surface);
     vk::Extent2D ChooseExtent(uint32_t width, uint32_t height, vk::SurfaceCapabilitiesKHR capabilities);

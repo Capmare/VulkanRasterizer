@@ -42,8 +42,9 @@ void VulkanWindow::MainLoop()
 	m_GraphicsQueue->waitIdle();
 }
 
-void VulkanWindow::Cleanup() const {
+void VulkanWindow::Cleanup() {
 	// clear all swapchains before destroying surface
+	m_SwapChainFactory.reset();
 	m_SwapChain->clear();
 
 	vkDestroySurfaceKHR(**m_Instance, m_Surface, nullptr);
@@ -111,16 +112,37 @@ void VulkanWindow::InitVulkan() {
 	}
 	m_Images = m_SwapChain->getImages();
 
-
-
 	for (uint32_t i = 0; i < m_Images.size(); ++i) {
-		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory->m_ImageViews,m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool));
+		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(),m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool));
 	}
 
 }
 
 void VulkanWindow::DrawFrame() {
 
+
+	int width, height;
+	glfwGetFramebufferSize(m_Window, &width, &height);
+
+
+
+	if (m_bFrameBufferResized) {
+		m_Device->waitIdle();
+
+		m_SwapChain.reset();
+		m_SwapChainFactory->m_ImageViews.clear();
+
+		m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
+			m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, width, height));
+
+		for (uint32_t i = 0; i < m_ImageFrames.size(); ++i) {
+			m_ImageFrames[i].m_SwapChainFactory = m_SwapChainFactory.get();
+		}
+
+		m_Images = m_SwapChain->getImages();
+
+		m_bFrameBufferResized = false;
+	}
 
 	vk::Result waitResult = m_Device->waitForFences({*m_RenderFinishedFence}, false, UINT64_MAX);
 	m_Device->resetFences({*m_RenderFinishedFence});
@@ -141,7 +163,7 @@ void VulkanWindow::DrawFrame() {
 
 	uint32_t imageIndex = acquireResult.second;
 
-	m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_PhysicalDevice->getSurfaceCapabilitiesKHR(m_Surface).currentExtent,rawShaders);
+	m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_SwapChainFactory->Extent,rawShaders);
 	vk::SubmitInfo submitInfo{};
 	vk::Semaphore waitSemaphores[] = { *m_ImageAvailableSemaphore };
 	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };

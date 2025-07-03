@@ -41,8 +41,12 @@ vk::raii::SwapchainKHR SwapChainFactory::Build_SwapChain(const vk::raii::Device 
 
     auto swapchain = logicalDevice.createSwapchainKHR(SwapChainCreateInfo);
     std::vector<vk::Image> swapchainImages = swapchain.getImages();
-    for (uint32_t i = 0; i < ImageCount; i++) {
-        vk::raii::ImageView ImageView{ImageFactory::CreateImageView(logicalDevice,swapchainImages[i],Format.format)};
+
+    // Clear old image views before creating new ones!
+    m_ImageViews.clear();
+
+    for (uint32_t i = 0; i < swapchainImages.size(); i++) {
+        vk::raii::ImageView ImageView{ImageFactory::CreateImageView(logicalDevice, swapchainImages[i], Format.format)};
         m_ImageViews.push_back(std::move(ImageView));
     }
 

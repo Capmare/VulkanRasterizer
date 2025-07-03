@@ -3,23 +3,26 @@
 
 #include <Vulkan/vulkan.hpp>
 #include "Factories/ImageFactory.h"
+#include "Factories/SwapChainFactory.h"
 #include "vulkan/vulkan_raii.hpp"
+
+class SwapChainFactory;
 
 class ImageFrame {
 
 public:
-    ImageFrame(const std::vector<vk::Image>& images,
-               std::vector<vk::raii::ImageView>& imageViews,
-               vk::raii::CommandBuffer cmdBuffer)
+    ImageFrame(const std::vector<vk::Image>& images
+               , SwapChainFactory* SwapChainFactory
+               ,vk::raii::CommandBuffer cmdBuffer)
         : m_Images(images)
-        , m_ImageViews(imageViews)
+        , m_SwapChainFactory(SwapChainFactory)
         , m_CommandBuffer(std::move(cmdBuffer))
     {}
 
     void RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders);
 
     void Build_ColorAttachment(uint32_t index) {
-        m_ColorAttachment.setImageView(*m_ImageViews[index]);
+        m_ColorAttachment.setImageView(m_SwapChainFactory->m_ImageViews[index]);
         m_ColorAttachment.setImageLayout(vk::ImageLayout::eAttachmentOptimal);
         m_ColorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
         m_ColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -35,10 +38,10 @@ public:
         m_RenderingInfo.setColorAttachments(m_ColorAttachment);
     }
 
-    std::vector<vk::raii::ImageView>& m_ImageViews;
     const std::vector<vk::Image>& m_Images;
     vk::raii::CommandBuffer m_CommandBuffer;
 
+    SwapChainFactory* m_SwapChainFactory;
 private:
     vk::RenderingAttachmentInfoKHR m_ColorAttachment = {};
     vk::RenderingInfoKHR m_RenderingInfo = {};

@@ -58,7 +58,7 @@ private:
 	void DrawFrame();
 
 	void MainLoop();
-	void Cleanup() const;
+	void Cleanup();
 
 
 	void CreateSurface();
@@ -84,7 +84,6 @@ private:
 
 	vk::SurfaceKHR m_Surface;
 	std::vector<vk::Image> m_Images;
-	std::vector<vk::raii::ImageView> m_ImageViews;
 
 	vk::raii::Context m_Context;
 	bool m_bFrameBufferResized{ false };

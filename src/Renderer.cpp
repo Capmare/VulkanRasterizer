@@ -22,7 +22,7 @@ vk::raii::CommandPool Renderer::CreateCommandPool(const vk::raii::Device &device
 vk::raii::CommandBuffer Renderer::CreateCommandBuffer(const vk::raii::Device &device, const vk::raii::CommandPool& commandPool) {
     vk::CommandBufferAllocateInfo allocInfo = {};
     allocInfo.setCommandBufferCount(1);
-    allocInfo.setCommandPool(commandPool);
+    allocInfo.setCommandPool(*commandPool);
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
 
     return std::move(device.allocateCommandBuffers(allocInfo).at(0));
