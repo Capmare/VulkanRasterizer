@@ -23,7 +23,10 @@
 #include "Factories/ImageFactory.h"
 #include "Factories/InstanceFactory.h"
 #include "Factories/LogicalDeviceFactory.h"
+#include "Factories/PipelineFactory.h"
 #include "Factories/SwapChainFactory.h"
+
+#include "vma/vk_mem_alloc.h"
 
 
 class VulkanWindow
@@ -69,6 +72,7 @@ private:
 	std::unique_ptr<LogicalDeviceFactory> m_LogicalDeviceFactory{};
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
+	std::unique_ptr<GraphicsPipelineFactory> m_GraphicsPipelineFactory{};
 
 	std::unique_ptr<vk::raii::Instance> m_Instance{};
 	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger;
@@ -76,7 +80,7 @@ private:
 	std::unique_ptr<vk::raii::Device> m_Device;
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain;
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue;
-
+	std::unique_ptr<vk::raii::Pipeline> m_Pipeline;
 
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore;
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore;
@@ -91,11 +95,18 @@ private:
 
 	std::vector<vk::raii::ShaderEXT> m_Shaders;
 	std::vector<vk::ShaderEXT> rawShaders;
+	std::vector<vk::raii::ShaderModule> m_ShaderModules;
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 
-
 	std::vector<ImageFrame> m_ImageFrames;
 
+	std::vector<vk::raii::ShaderModule> m_ShaderModule;
 
+	std::deque<std::function<void(VmaAllocator)>> m_VmaAllocatorsDeletionQueue;
+
+	VmaAllocator m_VmaAllocator{};
+
+	std::unique_ptr<MeshFactory> m_MeshFactory;
+	Mesh m_TriangleMesh;
 };

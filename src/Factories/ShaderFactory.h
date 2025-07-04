@@ -22,7 +22,8 @@ public:
 
     static std::vector<vk::raii::ShaderEXT> Build_Shader(const vk::raii::Device &device, const char *VertexFile, const char *FragmentFile);
 
-
+    static std::vector<vk::raii::ShaderModule> Build_ShaderModules(const vk::raii::Device &device, const char *VertexFile,
+                                                            const char *FragmentFile);
 };
 
 

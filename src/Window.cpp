@@ -6,7 +6,10 @@
 
 #include "Factories/ShaderFactory.h"
 
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+
+#include "vmaFile.h"
 
 VulkanWindow::VulkanWindow(vk::raii::Context& context)
 // Factories
@@ -43,6 +46,16 @@ void VulkanWindow::MainLoop()
 }
 
 void VulkanWindow::Cleanup() {
+
+	// clean up allocators
+	while (m_VmaAllocatorsDeletionQueue.size() > 0) {
+		m_VmaAllocatorsDeletionQueue.back()(m_VmaAllocator);
+		m_VmaAllocatorsDeletionQueue.pop_back();
+
+	}
+
+	vmaDestroyAllocator(m_VmaAllocator);
+
 	// clear all swapchains before destroying surface
 	m_SwapChainFactory.reset();
 	m_SwapChain->clear();
@@ -87,6 +100,15 @@ void VulkanWindow::InitVulkan() {
 	CreateSurface();
 	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
+
+
+	VmaAllocatorCreateInfo vmaCreateInfo;
+	vmaCreateInfo.device = **m_Device;
+	vmaCreateInfo.instance = **m_Instance;
+	vmaCreateInfo.physicalDevice = **m_PhysicalDevice;
+	vmaCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	vmaCreateAllocator(&vmaCreateInfo, &m_VmaAllocator);
+
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface,WIDTH,HEIGHT));
 	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
 	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
@@ -112,10 +134,79 @@ void VulkanWindow::InitVulkan() {
 	}
 	m_Images = m_SwapChain->getImages();
 
-	for (uint32_t i = 0; i < m_Images.size(); ++i) {
-		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(),m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool));
+	m_MeshFactory = std::make_unique<MeshFactory>();
+	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator,m_VmaAllocatorsDeletionQueue);
+
+	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
+	for	(auto& shader : ShaderModules) {
+		m_ShaderModule.emplace_back(std::move(shader));
 	}
 
+	vk::PipelineShaderStageCreateInfo vertexStageInfo{};
+	vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
+	vertexStageInfo.setModule(*m_ShaderModule[0]);
+	vertexStageInfo.setPName("main");
+
+	vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
+	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
+	fragmentStageInfo.setModule(*m_ShaderModule[1]);
+	fragmentStageInfo.setPName("main");
+
+	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {vertexStageInfo, fragmentStageInfo};
+
+	vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+	vk::PipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = vk::PolygonMode::eFill;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+	rasterizer.frontFace = vk::FrontFace::eClockwise;
+	rasterizer.depthBiasEnable = VK_FALSE;
+
+	vk::PipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+
+	vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask =
+		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	colorBlendAttachment.blendEnable = VK_FALSE;
+
+	vk::PipelineLayoutCreateInfo layoutInfo{};
+
+	vk::Format colorFormat = m_SwapChainFactory->Format.format;
+	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
+	m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
+		->SetShaderStages(shaderStages)
+		.SetVertexInput(vertexInputInfo)
+		.SetInputAssembly(inputAssembly)
+		.SetRasterizer(rasterizer)
+		.SetMultisampling(multisampling)
+		.SetColorBlendAttachment(colorBlendAttachment)
+		.SetDynamicStates({ vk::DynamicState::eViewport, vk::DynamicState::eScissor })
+		.SetLayout(*std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo))
+		.SetColorFormat(colorFormat)
+		.Build());
+
+
+	for (uint32_t i = 0; i < m_Images.size(); ++i) {
+		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(),m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool),&m_TriangleMesh);
+		m_ImageFrames.back().m_Pipeline = **m_Pipeline;
+	}
 }
 
 void VulkanWindow::DrawFrame() {
@@ -123,8 +214,6 @@ void VulkanWindow::DrawFrame() {
 
 	int width, height;
 	glfwGetFramebufferSize(m_Window, &width, &height);
-
-
 
 	if (m_bFrameBufferResized) {
 		m_Device->waitIdle();

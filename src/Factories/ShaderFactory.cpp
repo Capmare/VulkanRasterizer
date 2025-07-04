@@ -37,3 +37,26 @@ std::vector<vk::raii::ShaderEXT> ShaderFactory::Build_Shader(const vk::raii::Dev
     return device.createShadersEXT(infos);
 
 }
+
+
+std::vector<vk::raii::ShaderModule> ShaderFactory::Build_ShaderModules(const vk::raii::Device& device, const char* VertexFile, const char* FragmentFile) {
+    auto vertexCode = File::ReadSpirvFile(VertexFile);
+    if (vertexCode.empty()) throw std::runtime_error("Failed to read vertex shader");
+
+    auto fragmentCode = File::ReadSpirvFile(FragmentFile);
+    if (fragmentCode.empty()) throw std::runtime_error("Failed to read fragment shader");
+
+    vk::ShaderModuleCreateInfo vertexModuleInfo{};
+    vertexModuleInfo.setCode(vertexCode);
+
+    vk::ShaderModuleCreateInfo fragmentModuleInfo{};
+    fragmentModuleInfo.setCode(fragmentCode);
+
+    std::vector<vk::raii::ShaderModule> modules;
+    modules.reserve(2);  // optimize allocations
+
+    modules.emplace_back(device, vertexModuleInfo);
+    modules.emplace_back(device, fragmentModuleInfo);
+
+    return modules;
+}

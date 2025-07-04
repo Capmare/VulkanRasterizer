@@ -3,6 +3,7 @@
 
 #include <Vulkan/vulkan.hpp>
 #include "Factories/ImageFactory.h"
+#include "Factories/MeshFactory.h"
 #include "Factories/SwapChainFactory.h"
 #include "vulkan/vulkan_raii.hpp"
 
@@ -13,10 +14,13 @@ class ImageFrame {
 public:
     ImageFrame(const std::vector<vk::Image>& images
                , SwapChainFactory* SwapChainFactory
-               ,vk::raii::CommandBuffer cmdBuffer)
+               , vk::raii::CommandBuffer cmdBuffer
+               , Mesh* TriangleMesh
+               )
         : m_Images(images)
         , m_SwapChainFactory(SwapChainFactory)
         , m_CommandBuffer(std::move(cmdBuffer))
+        , m_Mesh(TriangleMesh)
     {}
 
     void RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders);
@@ -42,9 +46,17 @@ public:
     vk::raii::CommandBuffer m_CommandBuffer;
 
     SwapChainFactory* m_SwapChainFactory;
+
+    vk::Pipeline m_Pipeline;
+
 private:
     vk::RenderingAttachmentInfoKHR m_ColorAttachment = {};
     vk::RenderingInfoKHR m_RenderingInfo = {};
+
+    std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout;
+
+
+    Mesh* m_Mesh;
 };
 
 #endif // IMAGEFRAME_H
