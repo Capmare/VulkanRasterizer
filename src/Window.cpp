@@ -101,6 +101,12 @@ void VulkanWindow::InitVulkan() {
 	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
 
+	m_DescriptorSetFactory = std::make_unique<DescriptorSetFactory>(*m_Device);
+	m_DescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(std::move(m_DescriptorSetFactory
+	->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+	.AddBinding(1, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
+	.Build()));
+
 
 	VmaAllocatorCreateInfo vmaCreateInfo;
 	vmaCreateInfo.device = **m_Device;
@@ -204,6 +210,7 @@ void VulkanWindow::InitVulkan() {
 		.SetLayout(*std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo))
 		.SetColorFormat(colorFormat)
 		.Build());
+
 
 
 	for (uint32_t i = 0; i < m_Images.size(); ++i) {

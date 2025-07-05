@@ -7,36 +7,8 @@
 #include "Buffer.h"
 #include "vulkan/vulkan_raii.hpp"
 
-Mesh MeshFactory::Build_Triangle(VmaAllocator&Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue, const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue) {
-
+Mesh MeshFactory::Build_Triangle(VmaAllocator& Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue, const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue) {
     Mesh Mesh;
-
-    VkBuffer VertexBuffer = VK_NULL_HANDLE;
-    VkBuffer StagingBuffer = VK_NULL_HANDLE;
-
-    VmaAllocation VertexAllocation = VK_NULL_HANDLE;
-    VmaAllocationInfo VertexAllocationInfo{};
-
-    VmaAllocation StagingAllocation = VK_NULL_HANDLE;
-    VmaAllocationInfo StagingAllocationInfo{};
-
-
-
-    vk::BufferCreateInfo VertexBufferCreateInfo{};
-    VertexBufferCreateInfo.flags = vk::BufferCreateFlags();
-    VertexBufferCreateInfo.size = 3 * sizeof(Vertex);
-    VertexBufferCreateInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
-
-    VkBufferCreateInfo BufferInfoHandle = VertexBufferCreateInfo;
-    VmaAllocationCreateInfo AllocationCreateInfo{};
-    AllocationCreateInfo.flags =
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-        VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    AllocationCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-
-    vmaCreateBuffer(Allocator, &BufferInfoHandle, &AllocationCreateInfo,&StagingBuffer,&StagingAllocation, &StagingAllocationInfo);
-
 
     Vertex vertices[3] = {
         {{-0.75f,  0.75f}, {1.0f, 0.0f, 0.0f}},
@@ -44,31 +16,91 @@ Mesh MeshFactory::Build_Triangle(VmaAllocator&Allocator, std::deque<std::functio
         {{ 0.0f,  -0.75f}, {0.0f, 0.0f, 1.0f}}
     };
 
+    uint32_t indices[3] = { 0, 1, 2 };
+    Mesh.m_IndexCount = 3;
+
+    VkBuffer vertexStagingBuffer;
+    VmaAllocation vertexStagingAllocation;
+    VmaAllocationInfo vertexStagingInfo{};
+
+    vk::BufferCreateInfo stagingBufferInfo{};
+    stagingBufferInfo.size = sizeof(vertices);
+    stagingBufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
+
+    VkBufferCreateInfo stagingVk = stagingBufferInfo;
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateBuffer(Allocator, &stagingVk, &stagingAllocInfo, &vertexStagingBuffer, &vertexStagingAllocation, &vertexStagingInfo);
     void* dst;
-    vmaMapMemory(Allocator,StagingAllocation,&dst);
-    memcpy(dst,vertices,3*sizeof(Vertex));
-    vmaUnmapMemory(Allocator,StagingAllocation);
+    vmaMapMemory(Allocator, vertexStagingAllocation, &dst);
+    memcpy(dst, vertices, sizeof(vertices));
+    vmaUnmapMemory(Allocator, vertexStagingAllocation);
 
-    VertexBufferCreateInfo.usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst;
-    BufferInfoHandle = VertexBufferCreateInfo;
-    AllocationCreateInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    vk::BufferCreateInfo vertexBufferInfo{};
+    vertexBufferInfo.size = sizeof(vertices);
+    vertexBufferInfo.usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst;
 
-    vmaCreateBuffer(Allocator, &BufferInfoHandle, &AllocationCreateInfo,&VertexBuffer,&VertexAllocation, &VertexAllocationInfo);
+    VkBufferCreateInfo vertexVk = vertexBufferInfo;
+    VmaAllocationCreateInfo vertexAllocInfo{};
+    vertexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vertexAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
 
-    Buffer::Copy(StagingBuffer,StagingAllocationInfo,VertexBuffer,VertexAllocationInfo,GraphicsQueue,CommandBuffer);
+    VkBuffer vertexBuffer;
+    VmaAllocation vertexAllocation;
+    VmaAllocationInfo vertexAllocInfoOut{};
+    vmaCreateBuffer(Allocator, &vertexVk, &vertexAllocInfo, &vertexBuffer, &vertexAllocation, &vertexAllocInfoOut);
 
-    Mesh.m_Buffer = VertexBuffer;
-    Mesh.m_Allocation = VertexAllocation;
-    Mesh.m_Offset = VertexAllocationInfo.offset;
+    Buffer::Copy(vertexStagingBuffer, vertexStagingInfo, vertexBuffer, vertexAllocInfoOut, GraphicsQueue, CommandBuffer);
 
+    Mesh.m_Buffer = vertexBuffer;
+    Mesh.m_Allocation = vertexAllocation;
+    Mesh.m_Offset = vertexAllocInfoOut.offset;
 
-    vmaSetAllocationName(Allocator,VertexAllocation,"VertexBuffer");
-    vmaSetAllocationName(Allocator,StagingAllocation,"StagingBuffer");
+    vmaDestroyBuffer(Allocator, vertexStagingBuffer, vertexStagingAllocation);
 
-    vmaDestroyBuffer(Allocator,StagingBuffer,StagingAllocation);
+    VkBuffer indexStagingBuffer;
+    VmaAllocation indexStagingAllocation;
+    VmaAllocationInfo indexStagingInfo{};
 
-    DeletionQueue.push_back([Mesh](VmaAllocator Allocator) {
-       vmaDestroyBuffer(Allocator,Mesh.m_Buffer,Mesh.m_Allocation);
+    vk::BufferCreateInfo indexStagingInfoVk{};
+    indexStagingInfoVk.size = sizeof(indices);
+    indexStagingInfoVk.usage = vk::BufferUsageFlagBits::eTransferSrc;
+
+    VkBufferCreateInfo indexVk = indexStagingInfoVk;
+    VmaAllocationCreateInfo indexAllocInfo{};
+    indexAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    indexAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateBuffer(Allocator, &indexVk, &indexAllocInfo, &indexStagingBuffer, &indexStagingAllocation, &indexStagingInfo);
+    vmaMapMemory(Allocator, indexStagingAllocation, &dst);
+    memcpy(dst, indices, sizeof(indices));
+    vmaUnmapMemory(Allocator, indexStagingAllocation);
+
+    vk::BufferCreateInfo indexBufferInfo{};
+    indexBufferInfo.size = sizeof(indices);
+    indexBufferInfo.usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst;
+
+    VkBuffer indexBuffer;
+    VmaAllocation indexAllocation;
+    VmaAllocationInfo indexAllocOut{};
+    vmaCreateBuffer(Allocator, reinterpret_cast<VkBufferCreateInfo *>(&indexBufferInfo), &vertexAllocInfo, &indexBuffer, &indexAllocation, &indexAllocOut);
+
+    Buffer::Copy(indexStagingBuffer, indexStagingInfo, indexBuffer, indexAllocOut, GraphicsQueue, CommandBuffer);
+
+    Mesh.m_IndexBuffer = indexBuffer;
+    Mesh.m_IndexAllocation = indexAllocation;
+    Mesh.m_IndexOffset = indexAllocOut.offset;
+
+    vmaDestroyBuffer(Allocator, indexStagingBuffer, indexStagingAllocation);
+
+    vmaSetAllocationName(Allocator, vertexAllocation, "VertexBuffer");
+    vmaSetAllocationName(Allocator, indexAllocation, "IndexBuffer");
+
+    DeletionQueue.push_back([mesh = Mesh](VmaAllocator allocator) {
+        vmaDestroyBuffer(allocator, mesh.m_Buffer, mesh.m_Allocation);
+        vmaDestroyBuffer(allocator, mesh.m_IndexBuffer, mesh.m_IndexAllocation);
     });
 
     return Mesh;

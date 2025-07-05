@@ -20,7 +20,8 @@ public:
     Buffer& operator=(const Buffer&) = delete;
     Buffer& operator=(Buffer&&) noexcept = delete;
 
-    static void Copy(vk::Buffer SourceBuffer,VmaAllocationInfo SourceInfo, vk::Buffer DestBuffer,VmaAllocationInfo DestInfo, vk::Queue Queue, vk::CommandBuffer CommandBuffer);
+    static void Copy(vk::Buffer SourceBuffer, VmaAllocationInfo SourceInfo, vk::Buffer DestBuffer, VmaAllocationInfo DestInfo, vk::Queue
+                     Queue, vk::CommandBuffer CommandBuffer);
 };
 
 

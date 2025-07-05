@@ -31,7 +31,8 @@ void ImageFrame::RecordCmdBuffer(uint32_t ImageIndex, const vk::Extent2D &Screen
 
     m_CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipeline);
     m_CommandBuffer.bindVertexBuffers2(0, m_Mesh->m_Buffer, m_Mesh->m_Offset);
-    m_CommandBuffer.draw(3, 1, 0, 0);
+    m_CommandBuffer.bindIndexBuffer(m_Mesh->m_IndexBuffer,0,vk::IndexType::eUint32);
+    m_CommandBuffer.drawIndexed(m_Mesh->m_IndexCount, 1, 0, 0, 0);
 
     m_CommandBuffer.endRenderingKHR();
 

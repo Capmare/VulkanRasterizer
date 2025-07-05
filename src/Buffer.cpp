@@ -14,8 +14,8 @@ void Buffer::Copy(vk::Buffer SourceBuffer, VmaAllocationInfo SourceInfo, vk::Buf
     CommandBuffer.begin(BufferInfo);
 
     vk::BufferCopy copyRegion;
-    copyRegion.srcOffset = SourceInfo.offset;
-    copyRegion.dstOffset = DestInfo.offset;
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
     copyRegion.size = SourceInfo.size;
 
     CommandBuffer.copyBuffer(SourceBuffer, DestBuffer, 1, &copyRegion);

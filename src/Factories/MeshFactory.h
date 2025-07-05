@@ -46,6 +46,11 @@ struct Mesh
     vk::Buffer m_Buffer{};
     VmaAllocation m_Allocation{};
     vk::DeviceSize m_Offset{};
+
+    VkBuffer m_IndexBuffer;
+    VmaAllocation m_IndexAllocation;
+    VkDeviceSize m_IndexOffset;
+    uint32_t m_IndexCount;
 };
 
 class MeshFactory {
@@ -59,10 +64,8 @@ public:
     MeshFactory& operator=(const MeshFactory&) = delete;
     MeshFactory& operator=(MeshFactory&&) noexcept = delete;
 
-
     Mesh Build_Triangle(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue, const vk::CommandBuffer &
                         CommandBuffer, vk::Queue GraphicsQueue);
-
 
 
 };

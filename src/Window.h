@@ -20,6 +20,7 @@
 #include "PhysicalDevicePicker.h"
 #include "Renderer.h"
 #include "Factories/DebugMessengerFactory.h"
+#include "Factories/DescriptorSetFactory.h"
 #include "Factories/ImageFactory.h"
 #include "Factories/InstanceFactory.h"
 #include "Factories/LogicalDeviceFactory.h"
@@ -73,6 +74,8 @@ private:
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
 	std::unique_ptr<GraphicsPipelineFactory> m_GraphicsPipelineFactory{};
+	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
+
 
 	std::unique_ptr<vk::raii::Instance> m_Instance{};
 	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger;
@@ -100,6 +103,7 @@ private:
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
 
+	std::unique_ptr<vk::raii::DescriptorSetLayout> m_DescriptorSetLayout;
 
 	std::vector<ImageFrame> m_ImageFrames;
 

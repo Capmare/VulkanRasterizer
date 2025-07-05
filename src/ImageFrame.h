@@ -20,8 +20,11 @@ public:
         : m_Images(images)
         , m_SwapChainFactory(SwapChainFactory)
         , m_CommandBuffer(std::move(cmdBuffer))
-        , m_Mesh(TriangleMesh)
-    {}
+        , m_Mesh(TriangleMesh) {
+
+
+
+    }
 
     void RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders);
 
