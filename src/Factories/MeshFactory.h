@@ -60,7 +60,8 @@ public:
     MeshFactory& operator=(MeshFactory&&) noexcept = delete;
 
 
-    Mesh Build_Triangle(VmaAllocator& Allocator, std::deque<std::function<void(VmaAllocator)>>& DeletionQueue);
+    Mesh Build_Triangle(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue, const vk::CommandBuffer &
+                        CommandBuffer, vk::Queue GraphicsQueue);
 
 
 

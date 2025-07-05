@@ -98,6 +98,8 @@ private:
 	std::vector<vk::raii::ShaderModule> m_ShaderModules;
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
+	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
+
 
 	std::vector<ImageFrame> m_ImageFrames;
 

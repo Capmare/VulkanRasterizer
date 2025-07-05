@@ -135,7 +135,9 @@ void VulkanWindow::InitVulkan() {
 	m_Images = m_SwapChain->getImages();
 
 	m_MeshFactory = std::make_unique<MeshFactory>();
-	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator,m_VmaAllocatorsDeletionQueue);
+
+	m_AuxCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,**m_AuxCmdBuffer,*m_GraphicsQueue);
 
 	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
 	for	(auto& shader : ShaderModules) {
@@ -190,6 +192,7 @@ void VulkanWindow::InitVulkan() {
 
 	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
+
 	m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
 		->SetShaderStages(shaderStages)
 		.SetVertexInput(vertexInputInfo)
@@ -224,8 +227,8 @@ void VulkanWindow::DrawFrame() {
 		m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
 			m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, width, height));
 
-		for (uint32_t i = 0; i < m_ImageFrames.size(); ++i) {
-			m_ImageFrames[i].m_SwapChainFactory = m_SwapChainFactory.get();
+		for (auto & m_ImageFrame : m_ImageFrames) {
+			m_ImageFrame.m_SwapChainFactory = m_SwapChainFactory.get();
 		}
 
 		m_Images = m_SwapChain->getImages();
