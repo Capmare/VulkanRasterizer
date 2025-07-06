@@ -1,5 +1,5 @@
+// ImageFrame.cpp
 #include "ImageFrame.h"
-
 #include "Factories/SwapChainFactory.h"
 
 ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image, const vk::Extent2D& screenSize) {
@@ -8,10 +8,10 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInf
     m_CommandBuffer.begin(vk::CommandBufferBeginInfo{});
 
     ImageFactory::ShiftImageLayout(
-    *m_CommandBuffer, image,
-    vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
-    vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
-    vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput
+        *m_CommandBuffer, image,
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+        vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput
     );
 
     m_CommandBuffer.beginRenderingKHR(renderingInfo);
@@ -20,11 +20,15 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInf
 }
 
 ImageFrameCommandFactory& ImageFrameCommandFactory::SetViewport(const vk::Extent2D& screenSize) {
-    vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(screenSize.width), static_cast<float>(screenSize.height), 0.0f, 1.0f};
-    m_CommandBuffer.setViewport(0, viewport);
+    std::vector<vk::Viewport> viewports = {
+        vk::Viewport{0.0f, 0.0f, float(screenSize.width), float(screenSize.height), 0.0f, 1.0f}
+    };
+    m_CommandBuffer.setViewportWithCountEXT(viewports);
 
-    vk::Rect2D scissor{{0, 0}, screenSize};
-    m_CommandBuffer.setScissor(0, scissor);
+    std::vector<vk::Rect2D> scissors = {
+        vk::Rect2D{{0, 0}, screenSize}
+    };
+    m_CommandBuffer.setScissorWithCountEXT(scissors);
 
     return *this;
 }
@@ -81,14 +85,21 @@ void ImageFrame::Build_ColorAttachment(uint32_t index) {
     m_ColorAttachment.setImageLayout(vk::ImageLayout::eAttachmentOptimal);
     m_ColorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
     m_ColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
-    m_ColorAttachment.setClearValue(vk::ClearValue({ 0.5f, 0.0f, 0.25f, 1.0f }));
+    m_ColorAttachment.setClearValue(vk::ClearValue({0.5f, 0.0f, 0.25f, 1.0f}));
 }
 
-void ImageFrame::Build_RenderingInfo(const vk::Extent2D &screenSize) {
+void ImageFrame::Build_RenderingInfo(const vk::Extent2D& screenSize) {
     m_RenderingInfo.setFlags(vk::RenderingFlagsKHR());
-    m_RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, screenSize));
+    m_RenderingInfo.setRenderArea(vk::Rect2D({0, 0}, screenSize));
     m_RenderingInfo.setLayerCount(1);
     m_RenderingInfo.setViewMask(0);
+
     m_RenderingInfo.setColorAttachmentCount(1);
-    m_RenderingInfo.setColorAttachments(m_ColorAttachment);
+    m_RenderingInfo.setPColorAttachments(&m_ColorAttachment);
+
+    if (m_DepthImageView && m_DepthFormat != vk::Format::eUndefined) {
+        m_RenderingInfo.setPDepthAttachment(&m_DepthAttachment);
+    } else {
+        m_RenderingInfo.setPDepthAttachment(nullptr);
+    }
 }

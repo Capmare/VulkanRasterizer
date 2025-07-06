@@ -6,8 +6,6 @@
 #include "Factories/ImageFactory.h"
 #include "Factories/MeshFactory.h"
 
-
-
 class SwapChainFactory;
 
 class ImageFrame {
@@ -27,16 +25,26 @@ public:
     void SetPipelineLayout(vk::PipelineLayout layout) { m_PipelineLayout = layout; }
     void SetSwapChainFactory(SwapChainFactory* factory) { m_SwapChainFactory = factory; }
     void SetCommandBuffer(vk::raii::CommandBuffer cmdBuffer) { m_CommandBuffer = std::move(cmdBuffer); }
+    void SetDepthImage(vk::ImageView depthView, vk::Format format) {
+        m_DepthImageView = depthView;
+        m_DepthFormat = format;
 
+        m_DepthAttachment.setImageView(m_DepthImageView);
+        m_DepthAttachment.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+        m_DepthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+        m_DepthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+        m_DepthAttachment.setClearValue(vk::ClearValue().setDepthStencil({1.0f, 0}));
+    }
     const vk::CommandBuffer& GetCommandBuffer() const { return m_CommandBuffer; }
 
 private:
     void Build_ColorAttachment(uint32_t index);
-
     void Build_RenderingInfo(const vk::Extent2D& screenSize);
 
-
     const std::vector<vk::Image>& m_Images;
+    vk::ImageView m_DepthImageView = nullptr;
+    vk::Format m_DepthFormat = vk::Format::eUndefined;
+
     SwapChainFactory* m_SwapChainFactory;
     vk::raii::CommandBuffer m_CommandBuffer;
     Mesh* m_Mesh;
@@ -45,9 +53,10 @@ private:
     vk::PipelineLayout m_PipelineLayout;
 
     vk::RenderingAttachmentInfoKHR m_ColorAttachment;
+    vk::RenderingAttachmentInfoKHR m_DepthAttachment;
+
     vk::RenderingInfoKHR m_RenderingInfo;
 };
-
 
 class ImageFrameCommandFactory {
 public:

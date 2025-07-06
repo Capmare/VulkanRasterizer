@@ -1,14 +1,8 @@
-//
-// Created by capma on 7/4/2025.
-//
-
 #ifndef PIPELINEFACTORY_H
 #define PIPELINEFACTORY_H
 
 #include <vulkan/vulkan.hpp>
-
 #include "vulkan/vulkan_raii.hpp"
-
 
 class GraphicsPipelineFactory {
 public:
@@ -23,6 +17,9 @@ public:
     GraphicsPipelineFactory& SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates);
     GraphicsPipelineFactory& SetLayout(vk::raii::PipelineLayout& layout);
     GraphicsPipelineFactory& SetColorFormat(vk::Format colorFormat);
+    GraphicsPipelineFactory& SetDepthFormat(vk::Format depthFormat);
+    GraphicsPipelineFactory& SetDepthStencil(const vk::PipelineDepthStencilStateCreateInfo& depthStencil);
+    GraphicsPipelineFactory& SetViewportState(const vk::PipelineViewportStateCreateInfo& viewportState);
 
     vk::raii::Pipeline Build();
 
@@ -39,11 +36,10 @@ private:
     vk::PipelineDynamicStateCreateInfo m_DynamicStateInfo{};
     vk::PipelineColorBlendStateCreateInfo m_ColorBlending{};
     vk::PipelineViewportStateCreateInfo m_ViewportState{};
+    vk::PipelineDepthStencilStateCreateInfo m_DepthStencil{};
     vk::raii::PipelineLayout* m_PipelineLayout = nullptr;
     vk::Format m_ColorFormat{};
+    vk::Format m_DepthFormat{};
 };
-
-
-
 
 #endif //PIPELINEFACTORY_H

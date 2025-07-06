@@ -15,8 +15,7 @@ Mesh MeshFactory::Build_Triangle(
 ) {
     Mesh mesh;
 
-    // === Vertex & Index Data ===
-    // 8 vertices for two squares (front and back faces)
+
     const std::vector<Vertex> vertices = {
         {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
         {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},

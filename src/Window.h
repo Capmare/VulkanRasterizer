@@ -20,6 +20,7 @@
 #include "PhysicalDevicePicker.h"
 #include "Renderer.h"
 #include "Factories/DebugMessengerFactory.h"
+#include "Factories/DepthImageFactory.h"
 #include "Factories/DescriptorSetFactory.h"
 #include "Factories/ImageFactory.h"
 #include "Factories/InstanceFactory.h"
@@ -75,7 +76,7 @@ private:
 	std::unique_ptr<Renderer> m_Renderer{};
 	std::unique_ptr<GraphicsPipelineFactory> m_GraphicsPipelineFactory{};
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
-
+	std::unique_ptr<DepthImageFactory> m_DepthImageFactory;
 
 	std::unique_ptr<vk::raii::Instance> m_Instance{};
 	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger;
