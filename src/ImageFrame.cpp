@@ -5,8 +5,6 @@
 ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image, const vk::Extent2D& screenSize) {
     m_CommandBuffer.reset();
 
-
-
     m_CommandBuffer.begin(vk::CommandBufferBeginInfo{});
 
     ImageFactory::ShiftImageLayout(
@@ -45,7 +43,7 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::BindPipeline(vk::Pipeline pi
 
 ImageFrameCommandFactory& ImageFrameCommandFactory::DrawMesh(const Mesh& mesh) {
     m_CommandBuffer.bindVertexBuffers2(0, {mesh.m_VertexBuffer}, mesh.m_VertexOffset);
-    m_CommandBuffer.bindIndexBuffer(mesh.m_IndexBuffer, 0, vk::IndexType::eUint32);
+    m_CommandBuffer.bindIndexBuffer(mesh.m_IndexBuffer, 0, vk::IndexType::eUint16);
     m_CommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_PipelineLayout, 0, {**mesh.DescriptorSet}, nullptr);
     m_CommandBuffer.drawIndexed(mesh.m_IndexCount, 1, 0, 0, 0);
     return *this;

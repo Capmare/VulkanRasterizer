@@ -1,14 +1,3 @@
-//
-// Created by capma on 7/3/2025.
-//
-
-#include "MeshFactory.h"
-
-#include "Buffer.h"
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "vulkan/vulkan_raii.hpp"
-
 #include "MeshFactory.h"
 #include "Buffer.h"
 #include "glm/ext/matrix_clip_space.hpp"
@@ -27,69 +16,104 @@ Mesh MeshFactory::Build_Triangle(
     Mesh mesh;
 
     // === Vertex & Index Data ===
-    Vertex vertices[4] = {
-        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}},
-    };
-    uint32_t indices[6] = { 0, 1, 2, 2, 3, 0 };
-    mesh.m_IndexCount = 6;
+    // 8 vertices for two squares (front and back faces)
+    const std::vector<Vertex> vertices = {
+        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}},
 
-    // === Vertex Staging ===
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    };
+
+    const std::vector<uint16_t> indices = {
+        0, 1, 2, 2, 3, 0,
+        4, 5, 6, 6, 7, 4
+    };
+    mesh.m_IndexCount = static_cast<uint32_t>(indices.size());
+
+    // === Vertex Staging Buffer ===
     VkBuffer vertexStagingBuffer;
     VmaAllocation vertexStagingAlloc;
     VmaAllocationInfo vertexStagingInfo{};
-    Buffer::Create(Allocator, sizeof(vertices),
+    Buffer::Create(Allocator,
+                   vertices.size() * sizeof(Vertex), // Correct size here!
                    vk::BufferUsageFlagBits::eTransferSrc,
                    VMA_MEMORY_USAGE_AUTO,
-                   vertexStagingBuffer, vertexStagingAlloc, vertexStagingInfo,
+                   vertexStagingBuffer,
+                   vertexStagingAlloc,
+                   vertexStagingInfo,
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
-    Buffer::UploadData(Allocator, vertexStagingAlloc, vertices, sizeof(vertices));
+    Buffer::UploadData(Allocator, vertexStagingAlloc, vertices.data(), vertices.size() * sizeof(Vertex));  // Correct size here!
 
     // === Vertex GPU Buffer ===
-    Buffer::Create(Allocator, sizeof(vertices),
+    Buffer::Create(Allocator,
+                   vertices.size() * sizeof(Vertex),
                    vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
                    VMA_MEMORY_USAGE_AUTO,
-                   mesh.m_VertexBuffer, mesh.m_VertexAllocation, mesh.m_VertexAllocInfo);
+                   mesh.m_VertexBuffer,
+                   mesh.m_VertexAllocation,
+                   mesh.m_VertexAllocInfo);
+
     Buffer::Copy(vertexStagingBuffer, vertexStagingInfo,
                  mesh.m_VertexBuffer, mesh.m_VertexAllocInfo,
                  GraphicsQueue, CommandBuffer);
+
     Buffer::Destroy(Allocator, vertexStagingBuffer, vertexStagingAlloc);
 
-    // === Index Staging ===
+    // === Index Staging Buffer ===
     VkBuffer indexStagingBuffer;
     VmaAllocation indexStagingAlloc;
     VmaAllocationInfo indexStagingInfo{};
-    Buffer::Create(Allocator, sizeof(indices),
+    Buffer::Create(Allocator,
+                   indices.size() * sizeof(uint16_t),
                    vk::BufferUsageFlagBits::eTransferSrc,
                    VMA_MEMORY_USAGE_AUTO,
-                   indexStagingBuffer, indexStagingAlloc, indexStagingInfo,
+                   indexStagingBuffer,
+                   indexStagingAlloc,
+                   indexStagingInfo,
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
-    Buffer::UploadData(Allocator, indexStagingAlloc, indices, sizeof(indices));
+    Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(uint16_t));
 
     // === Index GPU Buffer ===
-    Buffer::Create(Allocator, sizeof(indices),
+    Buffer::Create(Allocator,
+                   indices.size() * sizeof(uint16_t),
                    vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
                    VMA_MEMORY_USAGE_AUTO,
-                   mesh.m_IndexBuffer, mesh.m_IndexAllocation, mesh.m_IndexAllocInfo);
+                   mesh.m_IndexBuffer,
+                   mesh.m_IndexAllocation,
+                   mesh.m_IndexAllocInfo);
+
     Buffer::Copy(indexStagingBuffer, indexStagingInfo,
                  mesh.m_IndexBuffer, mesh.m_IndexAllocInfo,
                  GraphicsQueue, CommandBuffer);
+
     Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc);
 
-    // === Uniform Buffer ===
+    // === Uniform Buffer (MVP) ===
     UniformBufferObject ubo{};
     ubo.model = glm::mat4(1.0f);
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
+                           glm::vec3(0.0f),
+                           glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(45.0f),
+                                1.0f,
+                                0.1f,
+                                10.0f);
+    ubo.proj[1][1] *= -1; // Flip Y for Vulkan
 
-    Buffer::Create(Allocator, sizeof(ubo),
+    Buffer::Create(Allocator,
+                   sizeof(ubo),
                    vk::BufferUsageFlagBits::eUniformBuffer,
                    VMA_MEMORY_USAGE_CPU_TO_GPU,
-                   mesh.m_UniformBuffer, mesh.m_UniformAllocation, mesh.m_UniformAllocInfo,
+                   mesh.m_UniformBuffer,
+                   mesh.m_UniformAllocation,
+                   mesh.m_UniformAllocInfo,
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
     Buffer::UploadData(Allocator, mesh.m_UniformAllocation, &ubo, sizeof(ubo));
 
     // === Descriptor Set ===
@@ -132,4 +156,3 @@ Mesh MeshFactory::Build_Triangle(
 
     return mesh;
 }
-
