@@ -104,6 +104,8 @@ private:
 	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
 
 	std::unique_ptr<vk::raii::DescriptorSetLayout> m_DescriptorSetLayout;
+	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool;
+	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout;
 
 	std::vector<ImageFrame> m_ImageFrames;
 
@@ -115,4 +117,5 @@ private:
 
 	std::unique_ptr<MeshFactory> m_MeshFactory;
 	Mesh m_TriangleMesh;
+
 };

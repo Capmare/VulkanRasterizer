@@ -5,6 +5,8 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "Factories/ShaderFactory.h"
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/transform.hpp"
 
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -36,13 +38,12 @@ void VulkanWindow::FramebufferResizeCallback(GLFWwindow* window, int , int )
 
 void VulkanWindow::MainLoop()
 {
-	while (!glfwWindowShouldClose(m_Window))
-	{
+	while (!glfwWindowShouldClose(m_Window)) {
 		glfwPollEvents();
 		DrawFrame();
-	}
 
-	m_GraphicsQueue->waitIdle();
+		m_GraphicsQueue->waitIdle();
+	}
 }
 
 void VulkanWindow::Cleanup() {
@@ -102,11 +103,13 @@ void VulkanWindow::InitVulkan() {
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
 
 	m_DescriptorSetFactory = std::make_unique<DescriptorSetFactory>(*m_Device);
-	m_DescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(std::move(m_DescriptorSetFactory
-	->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
-	.AddBinding(1, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
-	.Build()));
-
+	m_DescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
+		std::move(
+			m_DescriptorSetFactory
+				->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+				.Build()
+		)
+	);
 
 	VmaAllocatorCreateInfo vmaCreateInfo;
 	vmaCreateInfo.device = **m_Device;
@@ -119,7 +122,6 @@ void VulkanWindow::InitVulkan() {
 	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
 	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
 	m_RenderFinishedFence = std::make_unique<vk::raii::Fence>(*m_Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
-
 
 	uint32_t QueueIdx = m_LogicalDeviceFactory->FindQueueFamilyIndex(*m_PhysicalDevice,m_Surface,vk::QueueFlagBits::eGraphics);
 
@@ -142,8 +144,22 @@ void VulkanWindow::InitVulkan() {
 
 	m_MeshFactory = std::make_unique<MeshFactory>();
 
+	vk::DescriptorPoolSize poolSize{};
+	poolSize.type = vk::DescriptorType::eUniformBuffer;
+	poolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolCreateInfo poolInfo{};
+	poolInfo.maxSets = 2;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+
+	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
+
+
+
 	m_AuxCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,**m_AuxCmdBuffer,*m_GraphicsQueue);
+	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,**m_AuxCmdBuffer,*m_GraphicsQueue,*m_Device,*m_DescriptorPool,*m_DescriptorSetLayout);
 
 	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
 	for	(auto& shader : ShaderModules) {
@@ -195,9 +211,16 @@ void VulkanWindow::InitVulkan() {
 	colorBlendAttachment.blendEnable = VK_FALSE;
 
 	vk::PipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &**m_DescriptorSetLayout;
+	layoutInfo.pushConstantRangeCount = 0;
+	layoutInfo.pPushConstantRanges = nullptr;
+
+	m_PipelineLayout = std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo);
 
 	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
+
 
 	m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
 		->SetShaderStages(shaderStages)
@@ -207,15 +230,16 @@ void VulkanWindow::InitVulkan() {
 		.SetMultisampling(multisampling)
 		.SetColorBlendAttachment(colorBlendAttachment)
 		.SetDynamicStates({ vk::DynamicState::eViewport, vk::DynamicState::eScissor })
-		.SetLayout(*std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo))
+		.SetLayout(*m_PipelineLayout)
 		.SetColorFormat(colorFormat)
 		.Build());
 
 
 
 	for (uint32_t i = 0; i < m_Images.size(); ++i) {
-		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(),m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool),&m_TriangleMesh);
-		m_ImageFrames.back().m_Pipeline = **m_Pipeline;
+		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(), m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool), &m_TriangleMesh);
+		m_ImageFrames.back().SetPipeline(**m_Pipeline);
+		m_ImageFrames.back().SetPipelineLayout(**m_PipelineLayout);
 	}
 }
 
@@ -234,8 +258,8 @@ void VulkanWindow::DrawFrame() {
 		m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
 			m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, width, height));
 
-		for (auto & m_ImageFrame : m_ImageFrames) {
-			m_ImageFrame.m_SwapChainFactory = m_SwapChainFactory.get();
+		for (auto& frame : m_ImageFrames) {
+			frame.SetSwapChainFactory(m_SwapChainFactory.get());
 		}
 
 		m_Images = m_SwapChain->getImages();
@@ -272,7 +296,7 @@ void VulkanWindow::DrawFrame() {
 	submitInfo.pWaitDstStageMask = waitStages;
 
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &*m_ImageFrames[imageIndex].m_CommandBuffer;
+	submitInfo.pCommandBuffers = &m_ImageFrames[imageIndex].GetCommandBuffer();
 
 	vk::Semaphore signalSemaphores[] = { *m_RenderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;

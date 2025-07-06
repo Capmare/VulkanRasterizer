@@ -1,65 +1,69 @@
-#ifndef IMAGEFRAME_H
-#define IMAGEFRAME_H
+#ifndef IMAGE_FRAME_COMMAND_BUILDER_H
+#define IMAGE_FRAME_COMMAND_BUILDER_H
 
-#include <Vulkan/vulkan.hpp>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
 #include "Factories/ImageFactory.h"
 #include "Factories/MeshFactory.h"
-#include "Factories/SwapChainFactory.h"
-#include "vulkan/vulkan_raii.hpp"
+
+
 
 class SwapChainFactory;
 
 class ImageFrame {
-
 public:
-    ImageFrame(const std::vector<vk::Image>& images
-               , SwapChainFactory* SwapChainFactory
-               , vk::raii::CommandBuffer cmdBuffer
-               , Mesh* TriangleMesh
-               )
+    ImageFrame(const std::vector<vk::Image>& images,
+               SwapChainFactory* swapChainFactory,
+               vk::raii::CommandBuffer commandBuffer,
+               Mesh* triangleMesh)
         : m_Images(images)
-        , m_SwapChainFactory(SwapChainFactory)
-        , m_CommandBuffer(std::move(cmdBuffer))
-        , m_Mesh(TriangleMesh) {
-
-
-
-    }
+        , m_SwapChainFactory(swapChainFactory)
+        , m_CommandBuffer(std::move(commandBuffer))
+        , m_Mesh(triangleMesh) {}
 
     void RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders);
 
-    void Build_ColorAttachment(uint32_t index) {
-        m_ColorAttachment.setImageView(m_SwapChainFactory->m_ImageViews[index]);
-        m_ColorAttachment.setImageLayout(vk::ImageLayout::eAttachmentOptimal);
-        m_ColorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
-        m_ColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
-        m_ColorAttachment.setClearValue(vk::ClearValue({ 0.5f, 0.0f, 0.25f, 1.0f }));
-    }
+    void SetPipeline(vk::Pipeline pipeline) { m_Pipeline = pipeline; }
+    void SetPipelineLayout(vk::PipelineLayout layout) { m_PipelineLayout = layout; }
+    void SetSwapChainFactory(SwapChainFactory* factory) { m_SwapChainFactory = factory; }
+    void SetCommandBuffer(vk::raii::CommandBuffer cmdBuffer) { m_CommandBuffer = std::move(cmdBuffer); }
 
-    void Build_RenderingInfo(const vk::Extent2D& screenSize) {
-        m_RenderingInfo.setFlags(vk::RenderingFlagsKHR());
-        m_RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, screenSize));
-        m_RenderingInfo.setLayerCount(1);
-        m_RenderingInfo.setViewMask(0);
-        m_RenderingInfo.setColorAttachmentCount(1);
-        m_RenderingInfo.setColorAttachments(m_ColorAttachment);
-    }
-
-    const std::vector<vk::Image>& m_Images;
-    vk::raii::CommandBuffer m_CommandBuffer;
-
-    SwapChainFactory* m_SwapChainFactory;
-
-    vk::Pipeline m_Pipeline;
+    const vk::CommandBuffer& GetCommandBuffer() const { return m_CommandBuffer; }
 
 private:
-    vk::RenderingAttachmentInfoKHR m_ColorAttachment = {};
-    vk::RenderingInfoKHR m_RenderingInfo = {};
+    void Build_ColorAttachment(uint32_t index);
 
-    std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout;
+    void Build_RenderingInfo(const vk::Extent2D& screenSize);
 
 
+    const std::vector<vk::Image>& m_Images;
+    SwapChainFactory* m_SwapChainFactory;
+    vk::raii::CommandBuffer m_CommandBuffer;
     Mesh* m_Mesh;
+
+    vk::Pipeline m_Pipeline;
+    vk::PipelineLayout m_PipelineLayout;
+
+    vk::RenderingAttachmentInfoKHR m_ColorAttachment;
+    vk::RenderingInfoKHR m_RenderingInfo;
 };
 
-#endif // IMAGEFRAME_H
+
+class ImageFrameCommandFactory {
+public:
+    ImageFrameCommandFactory(vk::raii::CommandBuffer& commandBuffer)
+        : m_CommandBuffer(commandBuffer) {}
+
+    ImageFrameCommandFactory& Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image, const vk::Extent2D& screenSize);
+    ImageFrameCommandFactory& SetViewport(const vk::Extent2D& screenSize);
+    ImageFrameCommandFactory& SetShaders(const std::vector<vk::ShaderEXT>& shaders);
+    ImageFrameCommandFactory& BindPipeline(vk::Pipeline pipeline, vk::PipelineLayout layout);
+    ImageFrameCommandFactory& DrawMesh(const Mesh& mesh);
+    ImageFrameCommandFactory& End(vk::Image image);
+
+private:
+    vk::raii::CommandBuffer& m_CommandBuffer;
+    vk::PipelineLayout m_PipelineLayout{};
+};
+
+#endif // IMAGE_FRAME_COMMAND_BUILDER_H

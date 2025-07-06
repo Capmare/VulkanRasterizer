@@ -28,3 +28,42 @@ void Buffer::Copy(vk::Buffer SourceBuffer, VmaAllocationInfo SourceInfo, vk::Buf
     Queue.waitIdle();
 
 }
+
+void Buffer::Create(VmaAllocator allocator,
+                    vk::DeviceSize size,
+                    vk::BufferUsageFlags usage,
+                    VmaMemoryUsage memoryUsage,
+                    VkBuffer &buffer,
+                    VmaAllocation &allocation,
+                    VmaAllocationInfo &allocInfo,
+                    VmaAllocationCreateFlags flags) {
+    vk::BufferCreateInfo bufferInfo{};
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = vk::SharingMode::eExclusive;
+
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = memoryUsage;
+    allocCreateInfo.flags = flags;
+
+    vmaCreateBuffer(allocator,
+                    reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo),
+                    &allocCreateInfo,
+                    &buffer,
+                    &allocation,
+                    &allocInfo);
+}
+
+void Buffer::UploadData(VmaAllocator allocator,
+                        VmaAllocation allocation,
+                        const void* data,
+                        size_t size) {
+    void* dst;
+    vmaMapMemory(allocator, allocation, &dst);
+    std::memcpy(dst, data, size);
+    vmaUnmapMemory(allocator, allocation);
+}
+
+void Buffer::Destroy(VmaAllocator allocator, VkBuffer buffer, VmaAllocation allocation) {
+    vmaDestroyBuffer(allocator, buffer, allocation);
+}

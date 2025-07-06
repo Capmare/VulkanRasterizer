@@ -30,17 +30,7 @@ public:
             vk::ShaderStageFlags stageFlags,
             uint32_t descriptorCount = 1,
             const vk::Sampler* immutableSamplers = nullptr
-        ) {
-        vk::DescriptorSetLayoutBinding layoutBinding{};
-        layoutBinding.binding = binding;
-        layoutBinding.descriptorType = descriptorType;
-        layoutBinding.descriptorCount = descriptorCount;
-        layoutBinding.stageFlags = stageFlags;
-        layoutBinding.pImmutableSamplers = immutableSamplers;
-
-        m_Bindings.push_back(layoutBinding);
-        return *this;
-    }
+        );
 
     DescriptorSetFactory& SetFlags(vk::DescriptorSetLayoutCreateFlags flags);
 

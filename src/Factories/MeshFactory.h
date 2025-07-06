@@ -11,6 +11,16 @@
 #include <vulkan/vulkan.hpp>
 
 #include "vma/vk_mem_alloc.h"
+#include "glm/glm.hpp"
+#include "vulkan/vulkan_raii.hpp"
+
+
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
 
 struct Vertex {
     glm::vec2 position;
@@ -43,14 +53,26 @@ struct Vertex {
 
 struct Mesh
 {
-    vk::Buffer m_Buffer{};
-    VmaAllocation m_Allocation{};
-    vk::DeviceSize m_Offset{};
+    VkBuffer m_VertexBuffer{};
+    VmaAllocation m_VertexAllocation{};
+    VmaAllocationInfo m_VertexAllocInfo{};
+    VkDeviceSize m_VertexOffset{};
 
     VkBuffer m_IndexBuffer;
     VmaAllocation m_IndexAllocation;
+    VmaAllocationInfo m_IndexAllocInfo{};
     VkDeviceSize m_IndexOffset;
     uint32_t m_IndexCount;
+
+    VkBuffer m_UniformBuffer;
+    VmaAllocation m_UniformAllocation;
+    VmaAllocationInfo m_UniformAllocInfo;
+
+    std::unique_ptr<vk::raii::DescriptorSet> DescriptorSet;
+
+    void UpdateUbo(std::function<void(UniformBufferObject&)> updateFunc, UniformBufferObject& ubo) {
+        updateFunc(ubo);
+    }
 };
 
 class MeshFactory {
@@ -64,9 +86,10 @@ public:
     MeshFactory& operator=(const MeshFactory&) = delete;
     MeshFactory& operator=(MeshFactory&&) noexcept = delete;
 
-    Mesh Build_Triangle(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue, const vk::CommandBuffer &
-                        CommandBuffer, vk::Queue GraphicsQueue);
 
+    Mesh Build_Triangle(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
+                        const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,
+                        vk::DescriptorPool descriptorPool, vk::DescriptorSetLayout descriptorSetLayout);
 
 };
 

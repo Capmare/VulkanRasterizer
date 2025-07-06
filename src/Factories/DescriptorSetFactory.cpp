@@ -6,13 +6,13 @@
 
 
 DescriptorSetFactory & DescriptorSetFactory::AddBinding(uint32_t binding, vk::DescriptorType descriptorType,
-                                                        vk::ShaderStageFlags stageFlags, uint32_t descriptorCount) {
+    vk::ShaderStageFlags stageFlags, uint32_t descriptorCount, const vk::Sampler *immutableSamplers) {
     vk::DescriptorSetLayoutBinding layoutBinding{};
     layoutBinding.binding = binding;
     layoutBinding.descriptorType = descriptorType;
     layoutBinding.descriptorCount = descriptorCount;
     layoutBinding.stageFlags = stageFlags;
-    layoutBinding.pImmutableSamplers = nullptr;
+    layoutBinding.pImmutableSamplers = immutableSamplers;
 
     m_Bindings.push_back(layoutBinding);
     return *this;
