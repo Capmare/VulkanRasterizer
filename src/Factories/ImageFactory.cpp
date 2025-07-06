@@ -4,6 +4,142 @@
 
 #include "ImageFactory.h"
 
+#include "Buffer.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include <filesystem>
+#include <iostream>
+
+#include "stb_image.h"
+
+ImageResource ImageFactory::LoadTexture(
+    const std::string &filename,
+    const vk::raii::Device &device,
+    VmaAllocator allocator,
+    const vk::raii::CommandPool &commandPool,
+    const vk::raii::Queue &graphicsQueue)
+{
+    int texWidth, texHeight, texChannels;
+    stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    std::filesystem::path absPath = std::filesystem::absolute(filename);
+
+    if (!pixels) {
+        throw std::runtime_error("Failed to load texture image: " + absPath.string());
+    }
+
+    if (!pixels || texWidth == 0 || texHeight == 0) {
+        std::cout << "Loaded texture: " << texWidth << "x" << texHeight << " from " << filename << "\n";
+        throw std::runtime_error("Failed to load texture or texture has zero size: " + absPath.string());
+    }
+
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    // === Create staging buffer ===
+    VkBuffer stagingBuffer;
+    VmaAllocation stagingAlloc;
+    VmaAllocationInfo stagingInfo;
+    Buffer::Create(
+        allocator,
+        imageSize,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        VMA_MEMORY_USAGE_CPU_ONLY,
+        stagingBuffer,
+        stagingAlloc,
+        stagingInfo);
+
+    Buffer::UploadData(allocator, stagingAlloc, pixels, static_cast<size_t>(imageSize));
+    stbi_image_free(pixels);
+
+    // === Create vk::raii::Image ===
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = vk::Format::eR8G8B8A8Srgb;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    imageInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+    vk::raii::Image textureImage(device, imageInfo);
+
+    // === Allocate memory via VMA and bind ===
+    VmaAllocation textureAlloc;
+    VmaAllocationInfo textureAllocInfo{};
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    if (vmaAllocateMemoryForImage(
+            allocator,
+            static_cast<VkImage>(*textureImage),
+            &allocInfo,
+            &textureAlloc,
+            &textureAllocInfo) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate memory for image!");
+    }
+
+    vmaBindImageMemory(allocator, textureAlloc, static_cast<VkImage>(*textureImage));
+
+    // === Transition layout and copy ===
+    vk::raii::CommandBuffer commandBuffer = std::move(device.allocateCommandBuffers(
+        vk::CommandBufferAllocateInfo{
+            *commandPool,
+            vk::CommandBufferLevel::ePrimary,
+            1
+        }).front());
+
+    commandBuffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+    ShiftImageLayout(
+        *commandBuffer, *textureImage,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::AccessFlagBits::eNone,
+        vk::AccessFlagBits::eTransferWrite,
+        vk::PipelineStageFlagBits::eTopOfPipe,
+        vk::PipelineStageFlagBits::eTransfer);
+
+    vk::BufferImageCopy copyRegion{};
+    copyRegion.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
+    copyRegion.imageExtent = imageInfo.extent;
+
+
+    commandBuffer.copyBufferToImage(
+        stagingBuffer,
+        *textureImage,
+        vk::ImageLayout::eTransferDstOptimal,
+        copyRegion);
+
+    ShiftImageLayout(
+        *commandBuffer, *textureImage,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::AccessFlagBits::eTransferWrite,
+        vk::AccessFlagBits::eShaderRead,
+        vk::PipelineStageFlagBits::eTransfer,
+        vk::PipelineStageFlagBits::eFragmentShader);
+
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo{};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &*commandBuffer;
+    graphicsQueue.submit(submitInfo);
+    graphicsQueue.waitIdle();
+
+    Buffer::Destroy(allocator, stagingBuffer, stagingAlloc);
+
+    // === Create image view ===
+    vk::raii::ImageView imageView = CreateImageView(device, *textureImage, vk::Format::eR8G8B8A8Srgb);
+
+    return { std::move(textureImage), textureAlloc, std::move(imageView) };
+}
+
 
 vk::raii::ImageView ImageFactory::CreateImageView(const vk::raii::Device& device, vk::Image Image, vk::Format Format) {
 

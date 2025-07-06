@@ -56,6 +56,8 @@ void VulkanWindow::Cleanup() {
 		m_VmaAllocatorsDeletionQueue.pop_back();
 	}
 
+	m_ImageResource.reset();
+
 	vmaDestroyAllocator(m_VmaAllocator);
 
 	m_SwapChainFactory.reset();
@@ -100,6 +102,7 @@ void VulkanWindow::InitVulkan() {
 	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
 	CreateSurface();
 	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
+
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
 
 
@@ -108,16 +111,64 @@ void VulkanWindow::InitVulkan() {
 		std::move(
 			m_DescriptorSetFactory
 				->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+				.AddBinding(1, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
 				.Build()
 		)
 	);
+
+
+
+
+	vk::SamplerCreateInfo samplerInfo = {
+		{},
+		vk::Filter::eLinear,
+		vk::Filter::eLinear,
+		vk::SamplerMipmapMode::eLinear,
+		vk::SamplerAddressMode::eRepeat,
+		vk::SamplerAddressMode::eRepeat,
+		vk::SamplerAddressMode::eRepeat,
+		0.0f,
+		VK_TRUE,
+		16.0f,
+		VK_FALSE,
+		vk::CompareOp::eNever,
+		0.0f,
+		0.0f,
+		vk::BorderColor::eIntOpaqueBlack,
+		VK_FALSE
+	};
+
+	m_Sampler = std::make_unique<vk::raii::Sampler>(*m_Device,samplerInfo);
+
+
+
+	VkAllocationCallbacks myDebugCallbacks = {};
+	myDebugCallbacks.pUserData = nullptr;
+	myDebugCallbacks.pfnAllocation = [](void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
+		void* ptr = _aligned_malloc(size, alignment);
+		printf("Allocated %zu bytes at %p\n", size, ptr);
+		return ptr;
+	};
+	myDebugCallbacks.pfnReallocation = [](void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
+		void* ptr = _aligned_realloc(pOriginal, size, alignment);
+		printf("Reallocated %zu bytes at %p\n", size, ptr);
+		return ptr;
+	};
+	myDebugCallbacks.pfnFree = [](void* pUserData, void* pMemory) {
+		printf("Freeing memory at %p\n", pMemory);
+		_aligned_free(pMemory);
+	};
+	myDebugCallbacks.pfnInternalAllocation = nullptr;
+	myDebugCallbacks.pfnInternalFree = nullptr;
 
 	VmaAllocatorCreateInfo vmaCreateInfo{};
 	vmaCreateInfo.device = **m_Device;
 	vmaCreateInfo.instance = **m_Instance;
 	vmaCreateInfo.physicalDevice = **m_PhysicalDevice;
 	vmaCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	vmaCreateInfo.pAllocationCallbacks = &myDebugCallbacks;
 	vmaCreateAllocator(&vmaCreateInfo, &m_VmaAllocator);
+
 
 	// Create Swapchain and Depth Image
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
@@ -166,9 +217,20 @@ void VulkanWindow::InitVulkan() {
 	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
 
 	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
-
 	m_AuxCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-	m_TriangleMesh = m_MeshFactory->Build_Triangle(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, **m_AuxCmdBuffer, *m_GraphicsQueue, *m_Device, *m_DescriptorPool, *m_DescriptorSetLayout);
+	m_ImageResource = std::make_unique<ImageResource>(ImageFactory::LoadTexture("../models/textures/HatsuneMiku.jpg", *m_Device, m_VmaAllocator, *m_CmdPool, *m_GraphicsQueue));
+
+	auto allocator = m_VmaAllocator;
+	auto allocation = m_ImageResource->allocation;
+	m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
+		vmaFreeMemory(allocator, allocation);
+	});
+
+	m_TriangleMesh = m_MeshFactory->Build_Triangle(
+		m_VmaAllocator, m_VmaAllocatorsDeletionQueue,
+		**m_AuxCmdBuffer, *m_GraphicsQueue,
+		*m_Device, *m_DescriptorPool,
+		*m_DescriptorSetLayout, m_ImageResource->imageView, *m_Sampler);
 
 	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
 	for (auto& shader : ShaderModules) {
@@ -268,7 +330,6 @@ void VulkanWindow::InitVulkan() {
 		m_ImageFrames.back().SetDepthImage(m_DepthImageFactory->GetView(), m_DepthImageFactory->GetFormat());
 	}
 }
-
 
 void VulkanWindow::DrawFrame() {
 

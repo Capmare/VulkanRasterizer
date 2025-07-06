@@ -100,6 +100,7 @@ private:
 	std::vector<vk::raii::ShaderEXT> m_Shaders;
 	std::vector<vk::ShaderEXT> rawShaders;
 	std::vector<vk::raii::ShaderModule> m_ShaderModules;
+	std::unique_ptr<vk::raii::Sampler> m_Sampler;
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
@@ -118,5 +119,5 @@ private:
 
 	std::unique_ptr<MeshFactory> m_MeshFactory;
 	Mesh m_TriangleMesh;
-
+	std::unique_ptr<ImageResource> m_ImageResource;
 };

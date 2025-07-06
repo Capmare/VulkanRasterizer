@@ -4,6 +4,7 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
+// Add textureImageView and sampler as parameters to bind texture
 Mesh MeshFactory::Build_Triangle(
     VmaAllocator &Allocator,
     std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
@@ -11,44 +12,39 @@ Mesh MeshFactory::Build_Triangle(
     vk::Queue GraphicsQueue,
     vk::raii::Device &device,
     vk::DescriptorPool descriptorPool,
-    vk::DescriptorSetLayout descriptorSetLayout
+    vk::DescriptorSetLayout descriptorSetLayout,
+    vk::ImageView textureImageView,
+    vk::Sampler sampler
 ) {
     Mesh mesh;
 
-
+    // Vertex data with positions, colors, UVs
     const std::vector<Vertex> vertices = {
-        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}},
-
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{-0.5f, -0.5f, 0.0f}, {1, 0, 0}, {0, 0}},
+        {{ 0.5f, -0.5f, 0.0f}, {0, 1, 0}, {1, 0}},
+        {{ 0.5f,  0.5f, 0.0f}, {0, 0, 1}, {1, 1}},
+        {{-0.5f,  0.5f, 0.0f}, {1, 1, 1}, {0, 1}},
     };
 
     const std::vector<uint16_t> indices = {
-        0, 1, 2, 2, 3, 0,
-        4, 5, 6, 6, 7, 4
+        0, 1, 2, 2, 3, 0
     };
     mesh.m_IndexCount = static_cast<uint32_t>(indices.size());
 
-    // === Vertex Staging Buffer ===
+    // Create staging and GPU buffers for vertices
     VkBuffer vertexStagingBuffer;
     VmaAllocation vertexStagingAlloc;
     VmaAllocationInfo vertexStagingInfo{};
     Buffer::Create(Allocator,
-                   vertices.size() * sizeof(Vertex), // Correct size here!
+                   vertices.size() * sizeof(Vertex),
                    vk::BufferUsageFlagBits::eTransferSrc,
                    VMA_MEMORY_USAGE_AUTO,
                    vertexStagingBuffer,
                    vertexStagingAlloc,
                    vertexStagingInfo,
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
-    Buffer::UploadData(Allocator, vertexStagingAlloc, vertices.data(), vertices.size() * sizeof(Vertex));  // Correct size here!
+    Buffer::UploadData(Allocator, vertexStagingAlloc, vertices.data(), vertices.size() * sizeof(Vertex));
 
-    // === Vertex GPU Buffer ===
     Buffer::Create(Allocator,
                    vertices.size() * sizeof(Vertex),
                    vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
@@ -63,7 +59,7 @@ Mesh MeshFactory::Build_Triangle(
 
     Buffer::Destroy(Allocator, vertexStagingBuffer, vertexStagingAlloc);
 
-    // === Index Staging Buffer ===
+    // Create staging and GPU buffers for indices
     VkBuffer indexStagingBuffer;
     VmaAllocation indexStagingAlloc;
     VmaAllocationInfo indexStagingInfo{};
@@ -77,7 +73,6 @@ Mesh MeshFactory::Build_Triangle(
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
     Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(uint16_t));
 
-    // === Index GPU Buffer ===
     Buffer::Create(Allocator,
                    indices.size() * sizeof(uint16_t),
                    vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
@@ -92,7 +87,7 @@ Mesh MeshFactory::Build_Triangle(
 
     Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc);
 
-    // === Uniform Buffer (MVP) ===
+    // Uniform Buffer Object (MVP)
     UniformBufferObject ubo{};
     ubo.model = glm::mat4(1.0f);
     ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
@@ -102,7 +97,7 @@ Mesh MeshFactory::Build_Triangle(
                                 1.0f,
                                 0.1f,
                                 10.0f);
-    ubo.proj[1][1] *= -1; // Flip Y for Vulkan
+    ubo.proj[1][1] *= -1; // Vulkan flip Y
 
     Buffer::Create(Allocator,
                    sizeof(ubo),
@@ -115,7 +110,7 @@ Mesh MeshFactory::Build_Triangle(
 
     Buffer::UploadData(Allocator, mesh.m_UniformAllocation, &ubo, sizeof(ubo));
 
-    // === Descriptor Set ===
+    // Allocate descriptor set
     vk::DescriptorSetAllocateInfo allocInfo{};
     allocInfo.descriptorPool = descriptorPool;
     allocInfo.descriptorSetCount = 1;
@@ -124,22 +119,40 @@ Mesh MeshFactory::Build_Triangle(
     auto sets = vk::raii::DescriptorSets(device, allocInfo);
     mesh.DescriptorSet = std::make_unique<vk::raii::DescriptorSet>(std::move(sets.front()));
 
+    // Descriptor buffer info (uniform buffer)
     vk::DescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = mesh.m_UniformBuffer;
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferObject);
 
-    vk::WriteDescriptorSet descriptorWrite{};
-    descriptorWrite.dstSet = **mesh.DescriptorSet;
-    descriptorWrite.dstBinding = 0;
-    descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pBufferInfo = &bufferInfo;
+    // Descriptor image info (texture + sampler)
+    vk::DescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    imageInfo.imageView = textureImageView;
+    imageInfo.sampler = sampler;
 
-    device.updateDescriptorSets(descriptorWrite, nullptr);
+    // Write both descriptors: uniform buffer and combined image sampler
+    std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
 
-    // === Deletion Queue ===
+    // Uniform buffer write (binding 0)
+    descriptorWrites[0].dstSet = **mesh.DescriptorSet;
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+    // Combined image sampler write (binding 1)
+    descriptorWrites[1].dstSet = **mesh.DescriptorSet;
+    descriptorWrites[1].dstBinding = 1;
+    descriptorWrites[1].dstArrayElement = 0;
+    descriptorWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    descriptorWrites[1].descriptorCount = 1;
+    descriptorWrites[1].pImageInfo = &imageInfo;
+
+    device.updateDescriptorSets(descriptorWrites, nullptr);
+
+    // Setup deletion queue
     auto vb = mesh.m_VertexBuffer;
     auto va = mesh.m_VertexAllocation;
     auto ib = mesh.m_IndexBuffer;

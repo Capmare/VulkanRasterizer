@@ -43,6 +43,8 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
     );
 
     vk::PhysicalDeviceFeatures PhysicalDeviceFeatures = {};
+    PhysicalDeviceFeatures.samplerAnisotropy = VK_TRUE;
+
     vk::PhysicalDeviceShaderObjectFeaturesEXT ShaderObjectFeatures = {};
     vk::PhysicalDeviceDynamicRenderingFeaturesKHR DynamicRenderingFeatures = {};
 

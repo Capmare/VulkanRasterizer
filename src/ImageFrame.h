@@ -8,6 +8,8 @@
 
 class SwapChainFactory;
 
+
+
 class ImageFrame {
 public:
     ImageFrame(const std::vector<vk::Image>& images,
@@ -25,16 +27,8 @@ public:
     void SetPipelineLayout(vk::PipelineLayout layout) { m_PipelineLayout = layout; }
     void SetSwapChainFactory(SwapChainFactory* factory) { m_SwapChainFactory = factory; }
     void SetCommandBuffer(vk::raii::CommandBuffer cmdBuffer) { m_CommandBuffer = std::move(cmdBuffer); }
-    void SetDepthImage(vk::ImageView depthView, vk::Format format) {
-        m_DepthImageView = depthView;
-        m_DepthFormat = format;
+    void SetDepthImage(vk::ImageView depthView, vk::Format format);
 
-        m_DepthAttachment.setImageView(m_DepthImageView);
-        m_DepthAttachment.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
-        m_DepthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
-        m_DepthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
-        m_DepthAttachment.setClearValue(vk::ClearValue().setDepthStencil({1.0f, 0}));
-    }
     const vk::CommandBuffer& GetCommandBuffer() const { return m_CommandBuffer; }
 
 private:
@@ -63,7 +57,7 @@ public:
     ImageFrameCommandFactory(vk::raii::CommandBuffer& commandBuffer)
         : m_CommandBuffer(commandBuffer) {}
 
-    ImageFrameCommandFactory& Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image, const vk::Extent2D& screenSize);
+    ImageFrameCommandFactory& Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image);
     ImageFrameCommandFactory& SetViewport(const vk::Extent2D& screenSize);
     ImageFrameCommandFactory& SetShaders(const std::vector<vk::ShaderEXT>& shaders);
     ImageFrameCommandFactory& BindPipeline(vk::Pipeline pipeline, vk::PipelineLayout layout);

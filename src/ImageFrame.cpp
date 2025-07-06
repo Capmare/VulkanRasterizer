@@ -1,8 +1,9 @@
 // ImageFrame.cpp
 #include "ImageFrame.h"
 #include "Factories/SwapChainFactory.h"
+#include "stb_image.h"
 
-ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image, const vk::Extent2D& screenSize) {
+ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image) {
     m_CommandBuffer.reset();
 
     m_CommandBuffer.begin(vk::CommandBufferBeginInfo{});
@@ -72,12 +73,23 @@ void ImageFrame::RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screen
     Build_RenderingInfo(screenSize);
 
     ImageFrameCommandFactory builder(m_CommandBuffer);
-    builder.Begin(m_RenderingInfo, m_Images[imageIndex], screenSize)
+    builder.Begin(m_RenderingInfo, m_Images[imageIndex])
            .SetViewport(screenSize)
            .SetShaders(shaders)
            .BindPipeline(m_Pipeline, m_PipelineLayout)
            .DrawMesh(*m_Mesh)
            .End(m_Images[imageIndex]);
+}
+
+void ImageFrame::SetDepthImage(vk::ImageView depthView, vk::Format format) {
+    m_DepthImageView = depthView;
+    m_DepthFormat = format;
+
+    m_DepthAttachment.setImageView(m_DepthImageView);
+    m_DepthAttachment.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+    m_DepthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+    m_DepthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+    m_DepthAttachment.setClearValue(vk::ClearValue().setDepthStencil({1.0f, 0}));
 }
 
 void ImageFrame::Build_ColorAttachment(uint32_t index) {

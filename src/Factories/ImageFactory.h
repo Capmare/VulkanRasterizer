@@ -4,8 +4,15 @@
 
 #ifndef IMAGEFACTORY_H
 #define IMAGEFACTORY_H
+
+#include "vk_mem_alloc.h"
 #include "vulkan/vulkan_raii.hpp"
 
+struct ImageResource {
+    vk::raii::Image image;
+    VmaAllocation allocation;
+    vk::raii::ImageView imageView;
+};
 
 class ImageFactory {
 public:
@@ -16,6 +23,13 @@ public:
     ImageFactory(ImageFactory&&) noexcept = delete;
     ImageFactory& operator=(const ImageFactory&) = delete;
     ImageFactory& operator=(ImageFactory&&) noexcept = delete;
+
+    static ImageResource LoadTexture(
+        const std::string &filename,
+        const vk::raii::Device &device,
+        VmaAllocator allocator,
+        const vk::raii::CommandPool &commandPool,
+        const vk::raii::Queue &graphicsQueue);
 
     static vk::raii::ImageView CreateImageView(const vk::raii::Device& device,vk::Image Image ,vk::Format Format);
 
