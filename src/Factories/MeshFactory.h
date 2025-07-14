@@ -10,12 +10,13 @@
 #include "glm/vec3.hpp"
 #include <vulkan/vulkan.hpp>
 
+#include "ImageFactory.h"
 #include "vma/vk_mem_alloc.h"
 #include "glm/glm.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
 
-struct UniformBufferObject {
+struct MVP {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
@@ -53,13 +54,9 @@ struct Mesh
     VkDeviceSize m_IndexOffset;
     uint32_t m_IndexCount;
 
-    VkBuffer m_UniformBuffer;
-    VmaAllocation m_UniformAllocation;
-    VmaAllocationInfo m_UniformAllocInfo;
+    uint32_t m_TextureIdx{};
 
-    std::unique_ptr<vk::raii::DescriptorSet> DescriptorSet;
-
-    void UpdateUbo(std::function<void(UniformBufferObject&)> updateFunc, UniformBufferObject& ubo) {
+    void UpdateUbo(std::function<void(MVP&)> updateFunc, MVP& ubo) {
         updateFunc(ubo);
     }
 };
@@ -76,10 +73,22 @@ public:
     MeshFactory& operator=(MeshFactory&&) noexcept = delete;
 
 
-    Mesh Build_Triangle(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
-                        const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,
-                        vk::DescriptorPool descriptorPool, vk::DescriptorSetLayout descriptorSetLayout, vk::ImageView textureImageView, vk::
-                        Sampler sampler);
+    std::vector<Mesh> LoadModelFromGLTF(const std::string &path, VmaAllocator &Allocator,
+                                        std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
+                                        const vk::CommandBuffer &CommandBuffer, const vk::raii::Queue &GraphicsQueue,
+                                        vk::raii::Device &device, vk::DescriptorPool descriptorPool,
+                                        vk::DescriptorSetLayout descriptorSetLayout, vk::Sampler sampler, const vk::raii::CommandPool &CmdPool, std::vector<std
+                                        ::unique_ptr<ImageResource>> &textures);
+
+    Mesh Build_Mesh(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
+                    const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,
+                    vk::DescriptorPool descriptorPool, vk::DescriptorSetLayout descriptorSetLayout, uint32_t ImageIdx, vk::Sampler sampler, const
+                    std::vector<Vertex> &vertices, std::vector<uint32_t> indices);
+
+
+
+
+
 
 };
 

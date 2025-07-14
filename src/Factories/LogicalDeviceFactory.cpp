@@ -42,18 +42,9 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         &QueuePriority
     );
 
-    vk::PhysicalDeviceFeatures PhysicalDeviceFeatures = {};
-    PhysicalDeviceFeatures.samplerAnisotropy = VK_TRUE;
 
-    vk::PhysicalDeviceShaderObjectFeaturesEXT ShaderObjectFeatures = {};
+
     vk::PhysicalDeviceDynamicRenderingFeaturesKHR DynamicRenderingFeatures = {};
-
-
-    ShaderObjectFeatures.pNext = &DynamicRenderingFeatures; // chain next
-
-    ShaderObjectFeatures.sType = vk::StructureType::ePhysicalDeviceShaderObjectFeaturesEXT;
-    ShaderObjectFeatures.shaderObject = VK_TRUE;
-
     DynamicRenderingFeatures.dynamicRendering = VK_TRUE;
 
 
@@ -76,10 +67,17 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         EnabledLayers.data(),
         static_cast<uint32_t>(Extensions.size()),
         Extensions.data(),
-        &PhysicalDeviceFeatures
+        nullptr
     );
 
-    DeviceCreateInfo.pNext = &ShaderObjectFeatures; // chain next
+    vk::PhysicalDeviceVulkan12Features Vulkan12Features = {};
+    Vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+
+    vk::PhysicalDeviceFeatures2 Features{};
+    Features.features.samplerAnisotropy = VK_TRUE;
+    Features.pNext = &Vulkan12Features;
+
+    DeviceCreateInfo.pNext = &Features;
 
     try {
         vk::raii::Device Device = PhysicalDevice.createDevice(DeviceCreateInfo);

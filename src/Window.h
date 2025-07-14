@@ -65,6 +65,7 @@ private:
 	void MainLoop();
 	void Cleanup();
 
+	void UpdateUBO();
 
 	void CreateSurface();
 	GLFWwindow* m_Window{};
@@ -91,13 +92,13 @@ private:
 	std::unique_ptr<vk::raii::Fence> m_RenderFinishedFence;
 
 	vk::SurfaceKHR m_Surface;
-	std::vector<vk::Image> m_Images;
+	std::vector<ImageResource> m_SwapChainImages;
+	ImageResource m_DepthImage;
 
 	vk::raii::Context m_Context;
 	bool m_bFrameBufferResized{ false };
 
 
-	std::vector<vk::raii::ShaderEXT> m_Shaders;
 	std::vector<vk::ShaderEXT> rawShaders;
 	std::vector<vk::raii::ShaderModule> m_ShaderModules;
 	std::unique_ptr<vk::raii::Sampler> m_Sampler;
@@ -105,7 +106,9 @@ private:
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
 	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
 
-	std::unique_ptr<vk::raii::DescriptorSetLayout> m_DescriptorSetLayout;
+	std::unique_ptr<vk::raii::DescriptorSetLayout> m_FrameDescriptorSetLayout;
+	std::unique_ptr<vk::raii::DescriptorSetLayout> m_GlobalDescriptorSetLayout;
+
 	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool;
 	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout;
 
@@ -118,6 +121,20 @@ private:
 	VmaAllocator m_VmaAllocator{};
 
 	std::unique_ptr<MeshFactory> m_MeshFactory;
-	Mesh m_TriangleMesh;
-	std::unique_ptr<ImageResource> m_ImageResource;
+	std::vector<std::unique_ptr<ImageResource>> m_ImageResource;
+
+
+	VkBuffer m_UniformBuffer;
+	VmaAllocation m_UniformAllocation;
+	VmaAllocationInfo m_UniformAllocInfo;
+
+	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers;
+
+	std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets;
+    std::unique_ptr<vk::raii::DescriptorSets> m_GlobalDescriptorSets;
+
+	std::vector<Mesh> m_Meshes;
+
+
+
 };

@@ -6,6 +6,7 @@
 
 #include "Factories/ShaderFactory.h"
 #define GLM_ENABLE_EXPERIMENTAL
+#include "Buffer.h"
 #include "glm/gtx/transform.hpp"
 
 
@@ -56,7 +57,7 @@ void VulkanWindow::Cleanup() {
 		m_VmaAllocatorsDeletionQueue.pop_back();
 	}
 
-	m_ImageResource.reset();
+	m_ImageResource.clear();
 
 	vmaDestroyAllocator(m_VmaAllocator);
 
@@ -66,6 +67,19 @@ void VulkanWindow::Cleanup() {
 	vkDestroySurfaceKHR(**m_Instance, m_Surface, nullptr);
 	glfwDestroyWindow(m_Window);
 	glfwTerminate();
+}
+
+void VulkanWindow::UpdateUBO() {
+	MVP ubo{};
+	ubo.model = glm::mat4(1.0f);
+	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
+						   glm::vec3(0.0f),
+						   glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.proj = glm::perspective(glm::radians(45.0f),
+								1.0f,
+								0.1f,
+								10.0f);
+	ubo.proj[1][1] *= -1;
 }
 
 void VulkanWindow::CreateSurface() {
@@ -98,6 +112,10 @@ void VulkanWindow::InitWindow()
 }
 
 void VulkanWindow::InitVulkan() {
+
+
+
+
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
 	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
 	CreateSurface();
@@ -106,15 +124,45 @@ void VulkanWindow::InitVulkan() {
 	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
 
 
+	VmaAllocatorCreateInfo vmaCreateInfo{};
+	vmaCreateInfo.device = **m_Device;
+	vmaCreateInfo.instance = **m_Instance;
+	vmaCreateInfo.physicalDevice = **m_PhysicalDevice;
+	vmaCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	vmaCreateInfo.pAllocationCallbacks = nullptr;
+	vmaCreateAllocator(&vmaCreateInfo, &m_VmaAllocator);
+
 	m_DescriptorSetFactory = std::make_unique<DescriptorSetFactory>(*m_Device);
-	m_DescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
+	m_FrameDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
 		std::move(
 			m_DescriptorSetFactory
 				->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
-				.AddBinding(1, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment)
 				.Build()
 		)
 	);
+
+	m_DescriptorSetFactory->ResetFactory();
+
+	m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
+		std::move(
+			m_DescriptorSetFactory
+				->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
+				.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
+				.Build()
+		)
+	);
+
+	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
+
+	Buffer::Create(m_VmaAllocator,
+				 sizeof(MVP),
+				 vk::BufferUsageFlagBits::eUniformBuffer,
+				 VMA_MEMORY_USAGE_CPU_TO_GPU,
+				 m_UniformBuffer,
+				 m_UniformAllocation,
+				 m_UniformAllocInfo,
+				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
 
 
 
@@ -142,32 +190,26 @@ void VulkanWindow::InitVulkan() {
 
 
 
-	VkAllocationCallbacks myDebugCallbacks = {};
-	myDebugCallbacks.pUserData = nullptr;
-	myDebugCallbacks.pfnAllocation = [](void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
-		void* ptr = _aligned_malloc(size, alignment);
-		printf("Allocated %zu bytes at %p\n", size, ptr);
-		return ptr;
-	};
-	myDebugCallbacks.pfnReallocation = [](void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
-		void* ptr = _aligned_realloc(pOriginal, size, alignment);
-		printf("Reallocated %zu bytes at %p\n", size, ptr);
-		return ptr;
-	};
-	myDebugCallbacks.pfnFree = [](void* pUserData, void* pMemory) {
-		printf("Freeing memory at %p\n", pMemory);
-		_aligned_free(pMemory);
-	};
-	myDebugCallbacks.pfnInternalAllocation = nullptr;
-	myDebugCallbacks.pfnInternalFree = nullptr;
+	//VkAllocationCallbacks myDebugCallbacks = {};
+	//myDebugCallbacks.pUserData = nullptr;
+	//myDebugCallbacks.pfnAllocation = [](void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
+	//	void* ptr = _aligned_malloc(size, alignment);
+	//	printf("Allocated %zu bytes at %p\n", size, ptr);
+	//	return ptr;
+	//};
+	//myDebugCallbacks.pfnReallocation = [](void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
+	//	void* ptr = _aligned_realloc(pOriginal, size, alignment);
+	//	printf("Reallocated %zu bytes at %p\n", size, ptr);
+	//	return ptr;
+	//};
+	//myDebugCallbacks.pfnFree = [](void* pUserData, void* pMemory) {
+	//	printf("Freeing memory at %p\n", pMemory);
+	//	_aligned_free(pMemory);
+	//};
+	//myDebugCallbacks.pfnInternalAllocation = nullptr;
+	//myDebugCallbacks.pfnInternalFree = nullptr;
 
-	VmaAllocatorCreateInfo vmaCreateInfo{};
-	vmaCreateInfo.device = **m_Device;
-	vmaCreateInfo.instance = **m_Instance;
-	vmaCreateInfo.physicalDevice = **m_PhysicalDevice;
-	vmaCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-	vmaCreateInfo.pAllocationCallbacks = &myDebugCallbacks;
-	vmaCreateAllocator(&vmaCreateInfo, &m_VmaAllocator);
+
 
 
 	// Create Swapchain and Depth Image
@@ -190,47 +232,135 @@ void VulkanWindow::InitVulkan() {
 	VkQueue rawQueue = *m_Device->getQueue(QueueIdx, 0);
 	m_GraphicsQueue = std::make_unique<vk::raii::Queue>(*m_Device, rawQueue);
 
-	auto shaders = ShaderFactory::Build_Shader(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
-	for (auto& shader : shaders) {
-		m_Shaders.emplace_back(std::move(shader));
-	}
+
 
 	m_CmdPool = std::make_unique<vk::raii::CommandPool>(m_Renderer->CreateCommandPool(*m_Device, QueueIdx));
 
-	rawShaders.reserve(m_Shaders.size());
-	for (const auto& shader : m_Shaders) {
-		rawShaders.push_back(*shader);
+	auto swapImg = m_SwapChain->getImages();
+	m_SwapChainImages.resize(swapImg.size());
+
+	for (size_t i = 0; i < swapImg.size(); i++) {
+		m_SwapChainImages[i].image = swapImg[i];
 	}
 
-	m_Images = m_SwapChain->getImages();
 
 	m_MeshFactory = std::make_unique<MeshFactory>();
 
-	vk::DescriptorPoolSize poolSize{};
-	poolSize.type = vk::DescriptorType::eUniformBuffer;
-	poolSize.descriptorCount = 2;
+	vk::DescriptorPoolSize UboPoolSize{};
+	UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
+	UboPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize SamplerPoolSize{};
+	SamplerPoolSize.type = vk::DescriptorType::eSampler;
+	SamplerPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize TexturesPoolSize{};
+	TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
+	TexturesPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize PoolSizeArr[] = { UboPoolSize, SamplerPoolSize, TexturesPoolSize };
 
 	vk::DescriptorPoolCreateInfo poolInfo{};
-	poolInfo.maxSets = 2;
-	poolInfo.poolSizeCount = 1;
-	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = 4;
+	poolInfo.poolSizeCount = 3;
+	poolInfo.pPoolSizes = PoolSizeArr;
 	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
 
 	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
 	m_AuxCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-	m_ImageResource = std::make_unique<ImageResource>(ImageFactory::LoadTexture("../models/textures/HatsuneMiku.jpg", *m_Device, m_VmaAllocator, *m_CmdPool, *m_GraphicsQueue));
+
+	// Allocate descriptor set
+	vk::DescriptorSetAllocateInfo FrameAllocInfo{};
+	FrameAllocInfo.descriptorPool = *m_DescriptorPool;
+	FrameAllocInfo.descriptorSetCount = 2;
+	FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
+
+	m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,FrameAllocInfo);
+
+
+	// Descriptor buffer info (uniform buffer)
+	vk::DescriptorBufferInfo bufferInfo{};
+	bufferInfo.buffer = m_UniformBuffer;
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(MVP);
+
+	for (auto& ds : *m_FrameDescriptorSets.get()) {
+		vk::WriteDescriptorSet writeInfo{};
+
+		writeInfo.dstSet          = ds;
+		writeInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
+		writeInfo.descriptorCount = static_cast<uint32_t>(1);
+		writeInfo.pImageInfo      = nullptr;
+		writeInfo.pBufferInfo     = &bufferInfo;
+		m_Device->updateDescriptorSets(writeInfo, nullptr);
+
+	}
+
+	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
+
+	vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
+	GlobalAllocInfo.descriptorPool = *m_DescriptorPool;
+	GlobalAllocInfo.descriptorSetCount = 2;
+	GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
+
+	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
+
 
 	auto allocator = m_VmaAllocator;
-	auto allocation = m_ImageResource->allocation;
-	m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
+
+	for (auto& image : m_ImageResource) {
+		auto allocation = image->allocation;
+		m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
 		vmaFreeMemory(allocator, allocation);
 	});
+	}
 
-	m_TriangleMesh = m_MeshFactory->Build_Triangle(
-		m_VmaAllocator, m_VmaAllocatorsDeletionQueue,
-		**m_AuxCmdBuffer, *m_GraphicsQueue,
-		*m_Device, *m_DescriptorPool,
-		*m_DescriptorSetLayout, m_ImageResource->imageView, *m_Sampler);
+	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/adamHead.gltf",
+	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
+	                                            **m_AuxCmdBuffer,*m_GraphicsQueue,*m_Device,
+	                                            *m_DescriptorPool,*m_FrameDescriptorSetLayout,
+	                                            *m_Sampler,*m_CmdPool, m_ImageResource);
+
+	vk::DescriptorImageInfo SamplerInfo{};
+	SamplerInfo.imageLayout = vk::ImageLayout::eUndefined;
+	SamplerInfo.imageView = VK_NULL_HANDLE;
+	SamplerInfo.sampler = *m_Sampler;
+
+	std::vector<vk::DescriptorImageInfo> TextureImgArr{};
+
+	for (auto& ds: *m_GlobalDescriptorSets.get()) {
+		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
+		descriptorWrites.push_back(vk::WriteDescriptorSet());
+
+		descriptorWrites[0].dstSet = ds;
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = vk::DescriptorType::eSampler;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pImageInfo = &SamplerInfo;
+
+		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
+		for (auto& img : m_ImageResource) {
+			vk::DescriptorImageInfo descriptorImageInfo{};
+			descriptorImageInfo.imageLayout = img->imageLayout;
+			descriptorImageInfo.imageView = img->imageView;
+
+			DescriptorImgInfos.emplace_back(descriptorImageInfo);
+		}
+
+		descriptorWrites.push_back(vk::WriteDescriptorSet());
+		descriptorWrites[1].dstSet = ds;
+		descriptorWrites[1].dstBinding = 0;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
+		descriptorWrites[1].descriptorCount = DescriptorImgInfos.size();
+		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
+
+		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
+	}
+
+
+
 
 	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
 	for (auto& shader : ShaderModules) {
@@ -290,7 +420,7 @@ void VulkanWindow::InitVulkan() {
 
 	vk::PipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.setLayoutCount = 1;
-	layoutInfo.pSetLayouts = &**m_DescriptorSetLayout;
+	layoutInfo.pSetLayouts = &**m_FrameDescriptorSetLayout;
 	layoutInfo.pushConstantRangeCount = 0;
 	layoutInfo.pPushConstantRanges = nullptr;
 
@@ -298,6 +428,10 @@ void VulkanWindow::InitVulkan() {
 
 	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
+
+	m_DepthImage.image = m_DepthImageFactory->GetImage();
+	m_DepthImage.imageView = m_DepthImageFactory->GetView();
+
 
 
 	vk::PipelineViewportStateCreateInfo viewportState{};
@@ -323,12 +457,15 @@ void VulkanWindow::InitVulkan() {
 		.SetDepthFormat(depthFormat)
 		.Build());
 
-	for (uint32_t i = 0; i < m_Images.size(); ++i) {
-		m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(), m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool), &m_TriangleMesh);
-		m_ImageFrames.back().SetPipeline(**m_Pipeline);
-		m_ImageFrames.back().SetPipelineLayout(**m_PipelineLayout);
-		m_ImageFrames.back().SetDepthImage(m_DepthImageFactory->GetView(), m_DepthImageFactory->GetFormat());
-	}
+	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+
+	// for (uint32_t i = 0; i < m_Images.size(); ++i) {
+	// 	m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(), m_CommandBuffers[i], m_Meshes);
+	// 	m_ImageFrames.back().SetPipeline(**m_Pipeline);
+	// 	m_ImageFrames.back().SetPipelineLayout(**m_PipelineLayout);
+	// 	m_ImageFrames.back().SetDepthImage(m_DepthImageFactory->GetView(), m_DepthImageFactory->GetFormat());
+	// }
 }
 
 void VulkanWindow::DrawFrame() {
@@ -350,10 +487,19 @@ void VulkanWindow::DrawFrame() {
 			frame.SetSwapChainFactory(m_SwapChainFactory.get());
 		}
 
-		m_Images = m_SwapChain->getImages();
+		m_SwapChainImages.clear();
+
+		auto swapImg = m_SwapChain->getImages();
+		m_SwapChainImages.reserve(swapImg.size());
+
+		for (size_t i = 0; i < swapImg.size(); i++) {
+			m_SwapChainImages[i].image = swapImg[i];
+		}
 
 		m_bFrameBufferResized = false;
 	}
+
+
 
 	vk::Result waitResult = m_Device->waitForFences({*m_RenderFinishedFence}, false, UINT64_MAX);
 	m_Device->resetFences({*m_RenderFinishedFence});
@@ -374,7 +520,90 @@ void VulkanWindow::DrawFrame() {
 
 	uint32_t imageIndex = acquireResult.second;
 
-	m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_SwapChainFactory->Extent,rawShaders);
+	//m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_SwapChainFactory->Extent,rawShaders);
+
+
+	m_CommandBuffers[imageIndex].reset();
+	m_CommandBuffers[imageIndex]->begin(vk::CommandBufferBeginInfo());
+
+	ImageFactory::ShiftImageLayout(
+		*m_CommandBuffers[imageIndex],
+		m_SwapChainImages[imageIndex],
+		vk::ImageLayout::eColorAttachmentOptimal,
+		vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
+		vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput );
+
+	ImageFactory::ShiftImageLayout(
+		*m_CommandBuffers[imageIndex],
+		m_DepthImage,
+		vk::ImageLayout::eDepthAttachmentOptimal,
+		vk::AccessFlagBits::eNone, vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+		vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eEarlyFragmentTests );
+
+	vk::RenderingAttachmentInfo ColorAttachment;
+	ColorAttachment.setImageView(m_SwapChainFactory->m_ImageViews[imageIndex]);
+	ColorAttachment.setImageLayout(vk::ImageLayout::eAttachmentOptimal);
+	ColorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+	ColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+	ColorAttachment.setClearValue(vk::ClearValue({0.5f, 0.0f, 0.25f, 1.0f}));
+
+    vk::RenderingInfo rendering_info;
+	rendering_info.setFlags(vk::RenderingFlags());
+	rendering_info.setRenderArea(vk::Rect2D({0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}));
+	rendering_info.setLayerCount(1);
+	rendering_info.setViewMask(0);
+	rendering_info.setColorAttachmentCount(1);
+	rendering_info.setPColorAttachments(&ColorAttachment);
+
+	vk::RenderingAttachmentInfo depthAttachment;
+	depthAttachment.setImageView(*m_SwapChainFactory->m_DepthImageView);
+	depthAttachment.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+	depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+	depthAttachment.setStoreOp(vk::AttachmentStoreOp::eDontCare);
+	depthAttachment.setClearValue(vk::ClearValue().setDepthStencil({1.0f, 0}));
+
+	if (*m_SwapChainFactory->m_DepthImageView && m_DepthImageFactory->GetFormat() != vk::Format::eUndefined) {
+		rendering_info.setPDepthAttachment(&depthAttachment);
+	} else {
+		rendering_info.setPDepthAttachment(nullptr);
+	}
+
+	m_CommandBuffers[imageIndex]->beginRendering(rendering_info);
+
+	m_CommandBuffers[imageIndex]->bindPipeline(vk::PipelineBindPoint::eGraphics, **m_Pipeline);
+
+	std::vector<vk::DescriptorSet> rawDescriptorSets{};
+	rawDescriptorSets.emplace_back(*(*m_FrameDescriptorSets)[imageIndex]);
+	rawDescriptorSets.emplace_back(*(*m_GlobalDescriptorSets)[imageIndex]);
+
+	m_CommandBuffers[imageIndex]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics,*m_PipelineLayout,0,rawDescriptorSets,nullptr);
+
+	for (const auto& mesh: m_Meshes) {
+		m_CommandBuffers[imageIndex]->bindVertexBuffers(0,{mesh.m_VertexBuffer}, mesh.m_VertexOffset);
+		m_CommandBuffers[imageIndex]->bindIndexBuffer(mesh.m_IndexBuffer,0,vk::IndexType::eUint32);
+		m_CommandBuffers[imageIndex]->drawIndexed(mesh.m_IndexCount,1,0,0,0);
+	}
+
+	m_CommandBuffers[imageIndex]->endRendering();
+
+	ImageFactory::ShiftImageLayout(
+	*m_CommandBuffers[imageIndex],
+	m_SwapChainImages[imageIndex],
+	vk::ImageLayout::ePresentSrcKHR,
+		vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eNone,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eNone );
+
+	ImageFactory::ShiftImageLayout(
+		*m_CommandBuffers[imageIndex],
+		m_DepthImage,
+		vk::ImageLayout::eUndefined,
+		vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eNone,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eNone );
+
+	m_CommandBuffers[imageIndex]->end();
+
+
+
 	vk::SubmitInfo submitInfo{};
 	vk::Semaphore waitSemaphores[] = { *m_ImageAvailableSemaphore };
 	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
@@ -384,7 +613,7 @@ void VulkanWindow::DrawFrame() {
 	submitInfo.pWaitDstStageMask = waitStages;
 
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_ImageFrames[imageIndex].GetCommandBuffer();
+	submitInfo.pCommandBuffers = &**m_CommandBuffers[imageIndex];
 
 	vk::Semaphore signalSemaphores[] = { *m_RenderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;

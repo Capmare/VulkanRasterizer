@@ -6,7 +6,7 @@
 
 #include "File.h"
 
-std::vector<vk::raii::ShaderEXT> ShaderFactory::Build_Shader(const vk::raii::Device& device, const char *VertexFile,
+/*std::vector<vk::raii::ShaderEXT> ShaderFactory::Build_Shader(const vk::raii::Device& device, const char *VertexFile,
                                                              const char *FragmentFile) {
 
     const char* EntryPoint = "main";
@@ -36,7 +36,7 @@ std::vector<vk::raii::ShaderEXT> ShaderFactory::Build_Shader(const vk::raii::Dev
 
     return device.createShadersEXT(infos);
 
-}
+}*/
 
 
 std::vector<vk::raii::ShaderModule> ShaderFactory::Build_ShaderModules(const vk::raii::Device& device, const char* VertexFile, const char* FragmentFile) {
@@ -53,7 +53,7 @@ std::vector<vk::raii::ShaderModule> ShaderFactory::Build_ShaderModules(const vk:
     fragmentModuleInfo.setCode(fragmentCode);
 
     std::vector<vk::raii::ShaderModule> modules;
-    modules.reserve(2);  // optimize allocations
+    modules.reserve(2);  
 
     modules.emplace_back(device, vertexModuleInfo);
     modules.emplace_back(device, fragmentModuleInfo);

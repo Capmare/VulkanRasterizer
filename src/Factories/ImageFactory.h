@@ -9,9 +9,11 @@
 #include "vulkan/vulkan_raii.hpp"
 
 struct ImageResource {
-    vk::raii::Image image;
+    vk::Image image;
     VmaAllocation allocation;
-    vk::raii::ImageView imageView;
+    vk::ImageView imageView;
+    vk::ImageLayout imageLayout;
+
 };
 
 class ImageFactory {
@@ -34,8 +36,8 @@ public:
     static vk::raii::ImageView CreateImageView(const vk::raii::Device& device,vk::Image Image ,vk::Format Format);
 
     static void ShiftImageLayout(
-        const vk::CommandBuffer &commandBuffer, vk::Image image,
-        vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+        const vk::CommandBuffer &commandBuffer, ImageResource &image,
+        vk::ImageLayout newLayout,
         vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
         vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage
     );

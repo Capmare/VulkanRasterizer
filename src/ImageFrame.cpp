@@ -1,16 +1,19 @@
 // ImageFrame.cpp
 #include "ImageFrame.h"
+
+#include <chrono>
+
 #include "Factories/SwapChainFactory.h"
 #include "stb_image.h"
 
-ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image) {
+ImageFrameCommandFactory& ImageFrameCommandFactory::Begin(const vk::RenderingInfoKHR& renderingInfo, ImageResource& image) {
     m_CommandBuffer.reset();
 
     m_CommandBuffer.begin(vk::CommandBufferBeginInfo{});
 
     ImageFactory::ShiftImageLayout(
         *m_CommandBuffer, image,
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ImageLayout::eColorAttachmentOptimal,
         vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
         vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput
     );
@@ -46,20 +49,26 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::BindPipeline(vk::Pipeline pi
     return *this;
 }
 
-ImageFrameCommandFactory& ImageFrameCommandFactory::DrawMesh(const Mesh& mesh) {
+ImageFrameCommandFactory& ImageFrameCommandFactory::DrawMesh(const Mesh& mesh, const vk::raii::DescriptorSets& descriptorSets) {
     m_CommandBuffer.bindVertexBuffers2(0, {mesh.m_VertexBuffer}, mesh.m_VertexOffset);
     m_CommandBuffer.bindIndexBuffer(mesh.m_IndexBuffer, 0, vk::IndexType::eUint16);
-    m_CommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_PipelineLayout, 0, {**mesh.DescriptorSet}, nullptr);
+
+    std::vector<vk::DescriptorSet> rawDescriptorSets{};
+    for (auto& ds: descriptorSets) {
+        rawDescriptorSets.emplace_back(ds);
+    }
+
+    m_CommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_PipelineLayout, 0, rawDescriptorSets, nullptr);
     m_CommandBuffer.drawIndexed(mesh.m_IndexCount, 1, 0, 0, 0);
     return *this;
 }
 
-ImageFrameCommandFactory& ImageFrameCommandFactory::End(vk::Image image) {
+ImageFrameCommandFactory& ImageFrameCommandFactory::End(ImageResource& image) {
     m_CommandBuffer.endRenderingKHR();
 
     ImageFactory::ShiftImageLayout(
         *m_CommandBuffer, image,
-        vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+        vk::ImageLayout::ePresentSrcKHR,
         vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eNone,
         vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eBottomOfPipe
     );
@@ -69,16 +78,16 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::End(vk::Image image) {
 }
 
 void ImageFrame::RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders) {
-    Build_ColorAttachment(imageIndex);
-    Build_RenderingInfo(screenSize);
-
-    ImageFrameCommandFactory builder(m_CommandBuffer);
-    builder.Begin(m_RenderingInfo, m_Images[imageIndex])
-           .SetViewport(screenSize)
-           .SetShaders(shaders)
-           .BindPipeline(m_Pipeline, m_PipelineLayout)
-           .DrawMesh(*m_Mesh)
-           .End(m_Images[imageIndex]);
+    //Build_ColorAttachment(imageIndex);
+    //Build_RenderingInfo(screenSize);
+    //
+    //ImageFrameCommandFactory builder(m_CommandBuffer);
+    //builder.Begin(m_RenderingInfo, m_Images[imageIndex])
+    //       .SetViewport(screenSize)
+    //       .SetShaders(shaders)
+    //       .BindPipeline(m_Pipeline, m_PipelineLayout)
+    //       .DrawMesh(*m_Mesh, TODO)
+    //       .End(m_Images[imageIndex]);
 }
 
 void ImageFrame::SetDepthImage(vk::ImageView depthView, vk::Format format) {

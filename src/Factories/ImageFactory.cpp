@@ -18,6 +18,9 @@ ImageResource ImageFactory::LoadTexture(
     const vk::raii::CommandPool &commandPool,
     const vk::raii::Queue &graphicsQueue)
 {
+
+    ImageResource imgResource{};
+
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     std::filesystem::path absPath = std::filesystem::absolute(filename);
@@ -64,6 +67,8 @@ ImageResource ImageFactory::LoadTexture(
 
     vk::raii::Image textureImage(device, imageInfo);
 
+    imgResource.image = textureImage;
+
     // === Allocate memory via VMA and bind ===
     VmaAllocation textureAlloc;
     VmaAllocationInfo textureAllocInfo{};
@@ -92,8 +97,7 @@ ImageResource ImageFactory::LoadTexture(
     commandBuffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
     ShiftImageLayout(
-        *commandBuffer, *textureImage,
-        vk::ImageLayout::eUndefined,
+        *commandBuffer, imgResource,
         vk::ImageLayout::eTransferDstOptimal,
         vk::AccessFlagBits::eNone,
         vk::AccessFlagBits::eTransferWrite,
@@ -116,8 +120,7 @@ ImageResource ImageFactory::LoadTexture(
         copyRegion);
 
     ShiftImageLayout(
-        *commandBuffer, *textureImage,
-        vk::ImageLayout::eTransferDstOptimal,
+        *commandBuffer, imgResource,
         vk::ImageLayout::eShaderReadOnlyOptimal,
         vk::AccessFlagBits::eTransferWrite,
         vk::AccessFlagBits::eShaderRead,
@@ -137,7 +140,11 @@ ImageResource ImageFactory::LoadTexture(
     // === Create image view ===
     vk::raii::ImageView imageView = CreateImageView(device, *textureImage, vk::Format::eR8G8B8A8Srgb);
 
-    return { std::move(textureImage), textureAlloc, std::move(imageView) };
+    imgResource.image = std::move(textureImage);
+    imgResource.allocation = textureAlloc;
+    imgResource.imageView = std::move(imageView);
+
+    return std::move(imgResource);
 }
 
 
@@ -161,7 +168,7 @@ vk::raii::ImageView ImageFactory::CreateImageView(const vk::raii::Device& device
     return device.createImageView(CreateInfo);
 }
 
-void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, vk::Image image, vk::ImageLayout oldLayout,
+void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, ImageResource& image,
                                     vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
                                     vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
 
@@ -174,11 +181,11 @@ void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, vk::
     access.layerCount = 1;
 
     vk::ImageMemoryBarrier barrier;
-    barrier.oldLayout = oldLayout;
+    barrier.oldLayout = image.imageLayout;
     barrier.newLayout = newLayout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
+    barrier.image = image.image;
     barrier.subresourceRange = access;
 
     vk::PipelineStageFlags sourceStage, destinationStage;
@@ -186,6 +193,8 @@ void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, vk::
     barrier.srcAccessMask = srcAccessMask;
     barrier.dstAccessMask = dstAccessMask;
 
+    image.imageLayout = newLayout;
+    
     commandBuffer.pipelineBarrier(
         srcStage, dstStage, vk::DependencyFlags(), nullptr, nullptr, barrier);
 

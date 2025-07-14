@@ -44,6 +44,10 @@ public:
         return vk::raii::DescriptorSetLayout(m_Device, layoutInfo);
     }
 
+    void ResetFactory() {
+        m_Bindings.clear();
+        m_Flags = {};
+    }
 private:
     vk::raii::Device& m_Device;
     std::vector<vk::DescriptorSetLayoutBinding> m_Bindings;

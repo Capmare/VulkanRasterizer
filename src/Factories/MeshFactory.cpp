@@ -1,11 +1,119 @@
 #include "MeshFactory.h"
+
+#include <filesystem>
+
 #include "Buffer.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "vulkan/vulkan_raii.hpp"
+#include <assimp/scene.h>
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+
+#include "ImageFactory.h"
+
+
+std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
+    const std::string &path,
+    VmaAllocator &Allocator,
+    std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
+    const vk::CommandBuffer &CommandBuffer,
+    const vk::raii::Queue& GraphicsQueue,
+    vk::raii::Device &device,
+    vk::DescriptorPool descriptorPool,
+    vk::DescriptorSetLayout descriptorSetLayout,
+    vk::Sampler sampler,
+    const vk::raii::CommandPool& CmdPool,
+    std::vector<std::unique_ptr<ImageResource>>& textures
+    )
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path,
+        aiProcess_Triangulate |
+        aiProcess_FlipUVs |
+        aiProcess_GenSmoothNormals |
+        aiProcess_CalcTangentSpace);
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+        throw std::runtime_error("Failed to load model: " + std::filesystem::absolute(path).string());
+
+    std::filesystem::path baseDir = std::filesystem::path(path).parent_path();
+
+    std::unordered_map<std::string, uint32_t> textureCache;
+
+    std::vector<Mesh> meshes;
+
+    std::function<void(aiNode*, const aiScene*)> ProcessNode;
+    ProcessNode = [&](aiNode* node, const aiScene* scene) {
+        for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+
+            for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+                Vertex vert{};
+                vert.pos = glm::vec3(mesh->mVertices[v].x, mesh->mVertices[v].y, mesh->mVertices[v].z);
+                //vert.normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[v].x, mesh->mNormals[v].y, mesh->mNormals[v].z) : glm::vec3(0.0f);
+                if (mesh->HasTextureCoords(0))
+                    vert.texCoord = glm::vec2(mesh->mTextureCoords[0][v].x, mesh->mTextureCoords[0][v].y);
+                else
+                    vert.texCoord = glm::vec2(0.0f);
+                vertices.push_back(vert);
+            }
+
+            for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+                const aiFace& face = mesh->mFaces[f];
+                for (unsigned int j = 0; j < face.mNumIndices; ++j)
+                    indices.push_back(face.mIndices[j]);
+            }
+
+
+            int textureIdx{};
+
+            if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+                aiString texPath;
+                if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS) {
+                    std::string fullPath = (baseDir / texPath.C_Str()).string();
+
+                    if (textureCache.contains(fullPath)) {
+                        textureIdx = textureCache[fullPath];
+                    } else {
+                        textures.emplace_back(std::make_unique<ImageResource>(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue)));
+                        textureCache[fullPath] = textures.size() - 1;
+
+                        // Schedule deletion of allocation
+                        VmaAllocation allocation = textures.back().get()->allocation;
+                        DeletionQueue.push_back([Allocator, allocation](VmaAllocator alloc) {
+                            vmaFreeMemory(alloc, allocation);
+                        });
+                    }
+                }
+            }
+
+            Mesh meshObj = Build_Mesh(
+                Allocator, DeletionQueue, CommandBuffer, GraphicsQueue,
+                device, descriptorPool, descriptorSetLayout,
+                textureIdx, sampler, vertices, indices
+            );
+
+            meshes.push_back(std::move(meshObj));
+        }
+
+        for (unsigned int i = 0; i < node->mNumChildren; ++i)
+            ProcessNode(node->mChildren[i], scene);
+    };
+
+    ProcessNode(scene->mRootNode, scene);
+
+    return meshes;
+}
+
+
 
 // Add textureImageView and sampler as parameters to bind texture
-Mesh MeshFactory::Build_Triangle(
+Mesh MeshFactory::Build_Mesh(
     VmaAllocator &Allocator,
     std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
     const vk::CommandBuffer &CommandBuffer,
@@ -13,22 +121,13 @@ Mesh MeshFactory::Build_Triangle(
     vk::raii::Device &device,
     vk::DescriptorPool descriptorPool,
     vk::DescriptorSetLayout descriptorSetLayout,
-    vk::ImageView textureImageView,
-    vk::Sampler sampler
+    uint32_t ImageIdx,
+    vk::Sampler sampler,
+    const std::vector<Vertex>& vertices,
+    const std::vector<uint32_t> indices
 ) {
     Mesh mesh;
 
-    // Vertex data with positions, colors, UVs
-    const std::vector<Vertex> vertices = {
-        {{-0.5f, -0.5f, 0.0f}, {1, 0, 0}, {0, 0}},
-        {{ 0.5f, -0.5f, 0.0f}, {0, 1, 0}, {1, 0}},
-        {{ 0.5f,  0.5f, 0.0f}, {0, 0, 1}, {1, 1}},
-        {{-0.5f,  0.5f, 0.0f}, {1, 1, 1}, {0, 1}},
-    };
-
-    const std::vector<uint16_t> indices = {
-        0, 1, 2, 2, 3, 0
-    };
     mesh.m_IndexCount = static_cast<uint32_t>(indices.size());
 
     // Create staging and GPU buffers for vertices
@@ -64,17 +163,17 @@ Mesh MeshFactory::Build_Triangle(
     VmaAllocation indexStagingAlloc;
     VmaAllocationInfo indexStagingInfo{};
     Buffer::Create(Allocator,
-                   indices.size() * sizeof(uint16_t),
+                   indices.size() * sizeof(indices[0]),
                    vk::BufferUsageFlagBits::eTransferSrc,
                    VMA_MEMORY_USAGE_AUTO,
                    indexStagingBuffer,
                    indexStagingAlloc,
                    indexStagingInfo,
                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
-    Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(uint16_t));
+    Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(indices[0]));
 
     Buffer::Create(Allocator,
-                   indices.size() * sizeof(uint16_t),
+                   indices.size() * sizeof(indices[0]),
                    vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
                    VMA_MEMORY_USAGE_AUTO,
                    mesh.m_IndexBuffer,
@@ -87,83 +186,18 @@ Mesh MeshFactory::Build_Triangle(
 
     Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc);
 
-    // Uniform Buffer Object (MVP)
-    UniformBufferObject ubo{};
-    ubo.model = glm::mat4(1.0f);
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
-                           glm::vec3(0.0f),
-                           glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f),
-                                1.0f,
-                                0.1f,
-                                10.0f);
-    ubo.proj[1][1] *= -1; // Vulkan flip Y
-
-    Buffer::Create(Allocator,
-                   sizeof(ubo),
-                   vk::BufferUsageFlagBits::eUniformBuffer,
-                   VMA_MEMORY_USAGE_CPU_TO_GPU,
-                   mesh.m_UniformBuffer,
-                   mesh.m_UniformAllocation,
-                   mesh.m_UniformAllocInfo,
-                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-    Buffer::UploadData(Allocator, mesh.m_UniformAllocation, &ubo, sizeof(ubo));
-
-    // Allocate descriptor set
-    vk::DescriptorSetAllocateInfo allocInfo{};
-    allocInfo.descriptorPool = descriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &descriptorSetLayout;
-
-    auto sets = vk::raii::DescriptorSets(device, allocInfo);
-    mesh.DescriptorSet = std::make_unique<vk::raii::DescriptorSet>(std::move(sets.front()));
-
-    // Descriptor buffer info (uniform buffer)
-    vk::DescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = mesh.m_UniformBuffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(UniformBufferObject);
-
-    // Descriptor image info (texture + sampler)
-    vk::DescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    imageInfo.imageView = textureImageView;
-    imageInfo.sampler = sampler;
-
-    // Write both descriptors: uniform buffer and combined image sampler
-    std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
-
-    // Uniform buffer write (binding 0)
-    descriptorWrites[0].dstSet = **mesh.DescriptorSet;
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].dstArrayElement = 0;
-    descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
-    descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-    // Combined image sampler write (binding 1)
-    descriptorWrites[1].dstSet = **mesh.DescriptorSet;
-    descriptorWrites[1].dstBinding = 1;
-    descriptorWrites[1].dstArrayElement = 0;
-    descriptorWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    descriptorWrites[1].descriptorCount = 1;
-    descriptorWrites[1].pImageInfo = &imageInfo;
-
-    device.updateDescriptorSets(descriptorWrites, nullptr);
 
     // Setup deletion queue
     auto vb = mesh.m_VertexBuffer;
     auto va = mesh.m_VertexAllocation;
     auto ib = mesh.m_IndexBuffer;
     auto ia = mesh.m_IndexAllocation;
-    auto ub = mesh.m_UniformBuffer;
-    auto ua = mesh.m_UniformAllocation;
+    // auto ub = mesh.m_UniformBuffer;
+    // auto ua = mesh.m_UniformAllocation;
 
-    DeletionQueue.emplace_back([vb, va, ib, ia, ub, ua](VmaAllocator allocator) {
+    DeletionQueue.emplace_back([vb, va, ib, ia](VmaAllocator allocator) {
         Buffer::Destroy(allocator, vb, va);
         Buffer::Destroy(allocator, ib, ia);
-        Buffer::Destroy(allocator, ub, ua);
     });
 
     return mesh;

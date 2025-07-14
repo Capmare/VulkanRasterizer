@@ -15,7 +15,7 @@ public:
     ImageFrame(const std::vector<vk::Image>& images,
                SwapChainFactory* swapChainFactory,
                vk::raii::CommandBuffer commandBuffer,
-               Mesh* triangleMesh)
+               const std::vector<Mesh*>& triangleMesh)
         : m_Images(images)
         , m_SwapChainFactory(swapChainFactory)
         , m_CommandBuffer(std::move(commandBuffer))
@@ -41,7 +41,7 @@ private:
 
     SwapChainFactory* m_SwapChainFactory;
     vk::raii::CommandBuffer m_CommandBuffer;
-    Mesh* m_Mesh;
+    std::vector<Mesh*> m_Mesh;
 
     vk::Pipeline m_Pipeline;
     vk::PipelineLayout m_PipelineLayout;
@@ -57,12 +57,12 @@ public:
     ImageFrameCommandFactory(vk::raii::CommandBuffer& commandBuffer)
         : m_CommandBuffer(commandBuffer) {}
 
-    ImageFrameCommandFactory& Begin(const vk::RenderingInfoKHR& renderingInfo, vk::Image image);
+    ImageFrameCommandFactory& Begin(const vk::RenderingInfoKHR &renderingInfo, ImageResource &image);
     ImageFrameCommandFactory& SetViewport(const vk::Extent2D& screenSize);
     ImageFrameCommandFactory& SetShaders(const std::vector<vk::ShaderEXT>& shaders);
     ImageFrameCommandFactory& BindPipeline(vk::Pipeline pipeline, vk::PipelineLayout layout);
-    ImageFrameCommandFactory& DrawMesh(const Mesh& mesh);
-    ImageFrameCommandFactory& End(vk::Image image);
+    ImageFrameCommandFactory& DrawMesh(const Mesh &mesh, const vk::raii::DescriptorSets &descriptorSets);
+    ImageFrameCommandFactory& End(ImageResource &image);
 
 private:
     vk::raii::CommandBuffer& m_CommandBuffer;
