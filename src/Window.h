@@ -121,7 +121,7 @@ private:
 	VmaAllocator m_VmaAllocator{};
 
 	std::unique_ptr<MeshFactory> m_MeshFactory;
-	std::vector<std::unique_ptr<ImageResource>> m_ImageResource;
+	std::vector<ImageResource> m_ImageResource;
 
 
 	VkBuffer m_UniformBuffer;

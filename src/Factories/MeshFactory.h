@@ -56,9 +56,6 @@ struct Mesh
 
     uint32_t m_TextureIdx{};
 
-    void UpdateUbo(std::function<void(MVP&)> updateFunc, MVP& ubo) {
-        updateFunc(ubo);
-    }
 };
 
 class MeshFactory {
@@ -77,8 +74,8 @@ public:
                                         std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                                         const vk::CommandBuffer &CommandBuffer, const vk::raii::Queue &GraphicsQueue,
                                         vk::raii::Device &device, vk::DescriptorPool descriptorPool,
-                                        vk::DescriptorSetLayout descriptorSetLayout, vk::Sampler sampler, const vk::raii::CommandPool &CmdPool, std::vector<std
-                                        ::unique_ptr<ImageResource>> &textures);
+                                        vk::DescriptorSetLayout descriptorSetLayout, vk::Sampler sampler, const vk::raii::CommandPool &CmdPool, std::vector<
+                                        ImageResource> &textures);
 
     Mesh Build_Mesh(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                     const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,

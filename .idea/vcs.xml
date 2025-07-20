@@ -2,35 +2,5 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/assimp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/glfw-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/glm-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vma-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src/Vulkan-Headers" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src/glfw" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src/glm" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src/glslang" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-debug-visual-studio/_deps/vulkan_hpp-src/tinyxml2" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/assimp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/glfw-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/glm-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vma-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src/Vulkan-Headers" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src/glfw" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src/glm" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src/glslang" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-release-visual-studio/_deps/vulkan_hpp-src/tinyxml2" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/assimp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/glfw-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/glm-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vma-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src/Vulkan-Headers" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src/glfw" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src/glm" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src/glslang" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/cmake-build-relwithdebinfo-mingw/_deps/vulkan_hpp-src/tinyxml2" vcs="Git" />
   </component>
 </project>

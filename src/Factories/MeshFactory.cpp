@@ -24,7 +24,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     vk::DescriptorSetLayout descriptorSetLayout,
     vk::Sampler sampler,
     const vk::raii::CommandPool& CmdPool,
-    std::vector<std::unique_ptr<ImageResource>>& textures
+    std::vector<ImageResource>& textures
     )
 {
     Assimp::Importer importer;
@@ -51,10 +51,12 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
-
+            aiMatrix4x4 transform = scene->mRootNode->mTransformation;
             for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
                 Vertex vert{};
-                vert.pos = glm::vec3(mesh->mVertices[v].x, mesh->mVertices[v].y, mesh->mVertices[v].z);
+                aiVector3D const aiPosition = transform * mesh->mVertices[v];
+                vert.pos = glm::vec3(aiPosition.x, aiPosition.y, aiPosition.z);
+
                 //vert.normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[v].x, mesh->mNormals[v].y, mesh->mNormals[v].z) : glm::vec3(0.0f);
                 if (mesh->HasTextureCoords(0))
                     vert.texCoord = glm::vec2(mesh->mTextureCoords[0][v].x, mesh->mTextureCoords[0][v].y);
@@ -80,11 +82,12 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     if (textureCache.contains(fullPath)) {
                         textureIdx = textureCache[fullPath];
                     } else {
-                        textures.emplace_back(std::make_unique<ImageResource>(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue)));
+                        textures.emplace_back(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor));
+
                         textureCache[fullPath] = textures.size() - 1;
 
                         // Schedule deletion of allocation
-                        VmaAllocation allocation = textures.back().get()->allocation;
+                        VmaAllocation allocation = textures.back().allocation;
                         DeletionQueue.push_back([Allocator, allocation](VmaAllocator alloc) {
                             vmaFreeMemory(alloc, allocation);
                         });

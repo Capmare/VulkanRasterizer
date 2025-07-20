@@ -16,10 +16,11 @@ ImageResource ImageFactory::LoadTexture(
     const vk::raii::Device &device,
     VmaAllocator allocator,
     const vk::raii::CommandPool &commandPool,
-    const vk::raii::Queue &graphicsQueue)
+    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect)
 {
 
     ImageResource imgResource{};
+    imgResource.imageAspectFlags = aspect;
 
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -58,7 +59,7 @@ ImageResource ImageFactory::LoadTexture(
     imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = vk::Format::eR8G8B8A8Srgb;
+    imageInfo.format = ColorFormat;
     imageInfo.tiling = vk::ImageTiling::eOptimal;
     imageInfo.initialLayout = vk::ImageLayout::eUndefined;
     imageInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
@@ -138,34 +139,43 @@ ImageResource ImageFactory::LoadTexture(
     Buffer::Destroy(allocator, stagingBuffer, stagingAlloc);
 
     // === Create image view ===
-    vk::raii::ImageView imageView = CreateImageView(device, *textureImage, vk::Format::eR8G8B8A8Srgb);
+    vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect);
 
     imgResource.image = std::move(textureImage);
     imgResource.allocation = textureAlloc;
     imgResource.imageView = std::move(imageView);
 
-    return std::move(imgResource);
+    return imgResource;
 }
 
 
-vk::raii::ImageView ImageFactory::CreateImageView(const vk::raii::Device& device, vk::Image Image, vk::Format Format) {
+VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect) {
 
-    vk::ImageViewCreateInfo CreateInfo{};
-    CreateInfo.image = Image;
-    CreateInfo.format = Format;
-    CreateInfo.viewType = vk::ImageViewType::e2D;
-    CreateInfo.components.r = vk::ComponentSwizzle::eIdentity;
-    CreateInfo.components.g = vk::ComponentSwizzle::eIdentity;
-    CreateInfo.components.b = vk::ComponentSwizzle::eIdentity;
-    CreateInfo.components.a = vk::ComponentSwizzle::eIdentity;
-    CreateInfo.subresourceRange.layerCount = 1;
-    CreateInfo.subresourceRange.baseMipLevel = 0;
-    CreateInfo.subresourceRange.baseArrayLayer = 0;
-    CreateInfo.subresourceRange.levelCount = 1;
-    CreateInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    VkImageViewCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = Image;
+    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.format = static_cast<VkFormat>(Format);
 
+    createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 
-    return device.createImageView(CreateInfo);
+    createInfo.subresourceRange.aspectMask = static_cast<VkImageAspectFlags>(Aspect);
+    createInfo.subresourceRange.baseMipLevel = 0;
+    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.layerCount = 1;
+
+    VkImageView imageView;
+    VkResult result = vkCreateImageView(*device, &createInfo, NULL, &imageView);
+    if (result != VK_SUCCESS) {
+        fprintf(stderr, "Failed to create VkImageView (error %d)\n", result);
+        imageView = VK_NULL_HANDLE;
+    }
+
+    return imageView;
 }
 
 void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, ImageResource& image,
@@ -174,7 +184,7 @@ void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, Imag
 
 
     vk::ImageSubresourceRange access;
-    access.aspectMask = vk::ImageAspectFlagBits::eColor;
+    access.aspectMask = image.imageAspectFlags;
     access.baseMipLevel = 0;
     access.levelCount = 1;
     access.baseArrayLayer = 0;

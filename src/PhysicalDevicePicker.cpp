@@ -8,7 +8,7 @@
 #include <ostream>
 
 vk::raii::PhysicalDevice PhysicalDevicePicker::ChoosePhysicalDevice(const vk::raii::Instance& instance) {
-    std::vector<vk::raii::PhysicalDevice> PhysicalDevices = instance.enumeratePhysicalDevices();
+    const std::vector<vk::raii::PhysicalDevice> PhysicalDevices = instance.enumeratePhysicalDevices();
 
     if (PhysicalDevices.empty()) {
         throw std::runtime_error("No Vulkan-compatible physical devices found.");
@@ -17,6 +17,11 @@ vk::raii::PhysicalDevice PhysicalDevicePicker::ChoosePhysicalDevice(const vk::ra
     std::vector<const char*> RequiredExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
+
+    for (const auto& PhysicalDevice : PhysicalDevices) {
+        std::cout << PhysicalDevice.getProperties().deviceName << std::endl;
+
+    }
 
     for (const auto& PhysicalDevice : PhysicalDevices) {
         if (IsDeviceSuitable(PhysicalDevice, RequiredExtensions)) {
@@ -55,7 +60,9 @@ bool PhysicalDevicePicker::SupportsExtension(const vk::raii::PhysicalDevice& Phy
 
 bool PhysicalDevicePicker::IsDeviceSuitable(const vk::raii::PhysicalDevice& device,
                                             const std::vector<const char*>& requiredExtensions) {
-    if (!SupportsExtension(device, requiredExtensions)) {
+
+
+    if (!SupportsExtension(device, requiredExtensions) || device.getProperties().deviceType != vk::PhysicalDeviceType::eDiscreteGpu) {
         return false;
     }
 

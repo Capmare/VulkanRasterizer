@@ -59,6 +59,9 @@ void VulkanWindow::Cleanup() {
 
 	m_ImageResource.clear();
 
+	vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
+	vkDestroyImageView(**m_Device,m_DepthImage.imageView,nullptr);
+
 	vmaDestroyAllocator(m_VmaAllocator);
 
 	m_SwapChainFactory.reset();
@@ -72,14 +75,17 @@ void VulkanWindow::Cleanup() {
 void VulkanWindow::UpdateUBO() {
 	MVP ubo{};
 	ubo.model = glm::mat4(1.0f);
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f),
-						   glm::vec3(0.0f),
-						   glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = glm::lookAt(glm::vec3(20.f),
+						   glm::vec3(0.0f,.0f, 0.0f),
+						   glm::vec3(0.0f, 1.0f, 0.f));
 	ubo.proj = glm::perspective(glm::radians(45.0f),
 								1.0f,
 								0.1f,
-								10.0f);
+								1000.0f);
 	ubo.proj[1][1] *= -1;
+
+	Buffer::UploadData(m_VmaAllocator,m_UniformAllocation,&ubo,sizeof(ubo));
+
 }
 
 void VulkanWindow::CreateSurface() {
@@ -112,10 +118,6 @@ void VulkanWindow::InitWindow()
 }
 
 void VulkanWindow::InitVulkan() {
-
-
-
-
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
 	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
 	CreateSurface();
@@ -143,14 +145,6 @@ void VulkanWindow::InitVulkan() {
 
 	m_DescriptorSetFactory->ResetFactory();
 
-	m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
-		std::move(
-			m_DescriptorSetFactory
-				->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
-				.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
-				.Build()
-		)
-	);
 
 	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
 
@@ -162,9 +156,6 @@ void VulkanWindow::InitVulkan() {
 				 m_UniformAllocation,
 				 m_UniformAllocInfo,
 				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-
-
 
 
 	vk::SamplerCreateInfo samplerInfo = {
@@ -241,6 +232,7 @@ void VulkanWindow::InitVulkan() {
 
 	for (size_t i = 0; i < swapImg.size(); i++) {
 		m_SwapChainImages[i].image = swapImg[i];
+		m_SwapChainImages[i].imageAspectFlags = vk::ImageAspectFlagBits::eColor;
 	}
 
 
@@ -296,6 +288,33 @@ void VulkanWindow::InitVulkan() {
 
 	}
 
+
+
+
+	auto allocator = m_VmaAllocator;
+
+	for (auto& image : m_ImageResource) {
+		auto allocation = image.allocation;
+		m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
+		vmaFreeMemory(allocator, allocation);
+	});
+	}
+
+	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/scene.gltf",
+	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
+	                                            **m_AuxCmdBuffer,*m_GraphicsQueue,*m_Device,
+	                                            *m_DescriptorPool,*m_FrameDescriptorSetLayout,
+	                                            *m_Sampler,*m_CmdPool, m_ImageResource);
+
+
+	m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
+		std::move(
+			m_DescriptorSetFactory
+				->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
+				.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_ImageResource.size())
+				.Build()
+		)
+	);
 	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
 
 	vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
@@ -304,22 +323,6 @@ void VulkanWindow::InitVulkan() {
 	GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
 
 	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
-
-
-	auto allocator = m_VmaAllocator;
-
-	for (auto& image : m_ImageResource) {
-		auto allocation = image->allocation;
-		m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
-		vmaFreeMemory(allocator, allocation);
-	});
-	}
-
-	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/adamHead.gltf",
-	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
-	                                            **m_AuxCmdBuffer,*m_GraphicsQueue,*m_Device,
-	                                            *m_DescriptorPool,*m_FrameDescriptorSetLayout,
-	                                            *m_Sampler,*m_CmdPool, m_ImageResource);
 
 	vk::DescriptorImageInfo SamplerInfo{};
 	SamplerInfo.imageLayout = vk::ImageLayout::eUndefined;
@@ -342,15 +345,15 @@ void VulkanWindow::InitVulkan() {
 		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
 		for (auto& img : m_ImageResource) {
 			vk::DescriptorImageInfo descriptorImageInfo{};
-			descriptorImageInfo.imageLayout = img->imageLayout;
-			descriptorImageInfo.imageView = img->imageView;
+			descriptorImageInfo.imageLayout = img.imageLayout;
+			descriptorImageInfo.imageView = img.imageView;
 
 			DescriptorImgInfos.emplace_back(descriptorImageInfo);
 		}
 
 		descriptorWrites.push_back(vk::WriteDescriptorSet());
 		descriptorWrites[1].dstSet = ds;
-		descriptorWrites[1].dstBinding = 0;
+		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
 		descriptorWrites[1].descriptorCount = DescriptorImgInfos.size();
@@ -418,26 +421,53 @@ void VulkanWindow::InitVulkan() {
 		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 	colorBlendAttachment.blendEnable = VK_FALSE;
 
+	std::vector<vk::DescriptorSetLayout> DescriptorSetLayouts{*m_FrameDescriptorSetLayout,*m_GlobalDescriptorSetLayout};
+
+	vk::PushConstantRange pushConstantRange{};
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(uint32_t);
+	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
 	vk::PipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.setLayoutCount = 1;
-	layoutInfo.pSetLayouts = &**m_FrameDescriptorSetLayout;
-	layoutInfo.pushConstantRangeCount = 0;
-	layoutInfo.pPushConstantRanges = nullptr;
+	layoutInfo.setLayoutCount = DescriptorSetLayouts.size();
+	layoutInfo.pSetLayouts = DescriptorSetLayouts.data();
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	m_PipelineLayout = std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo);
+
+
 
 	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
 
-	m_DepthImage.image = m_DepthImageFactory->GetImage();
-	m_DepthImage.imageView = m_DepthImageFactory->GetView();
+	vk::ImageCreateInfo imageInfo{};
+	imageInfo.imageType = vk::ImageType::e2D;
+	imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(m_SwapChainFactory->Extent.width), static_cast<uint32_t>(m_SwapChainFactory->Extent.height), 1 };
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.format = depthFormat;
+	imageInfo.tiling = vk::ImageTiling::eOptimal;
+	imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+	imageInfo.usage = vk::ImageUsageFlagBits::eSampled;
+	imageInfo.samples = vk::SampleCountFlagBits::e1;
+	imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
 
+
+	VkImage img = VK_NULL_HANDLE;
+	VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
+	VmaAllocationCreateInfo vmaAllocationCreateInfo{};
+
+	vmaCreateImage(m_VmaAllocator, &imgInfo, &vmaAllocationCreateInfo, &img, &m_DepthImage.allocation, nullptr);
+	m_DepthImage.image = std::move(img);
+	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth);
+	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 
 	vk::PipelineViewportStateCreateInfo viewportState{};
-	viewportState.viewportCount = 0;
+	viewportState.viewportCount = 1;
 	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 0;
+	viewportState.scissorCount = 1;
 	viewportState.pScissors = nullptr;
 
 	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
@@ -450,7 +480,7 @@ void VulkanWindow::InitVulkan() {
 		.SetMultisampling(multisampling)
 		.SetColorBlendAttachment(colorBlendAttachment)
 		.SetViewportState(viewportState)
-		.SetDynamicStates({ vk::DynamicState::eViewportWithCount, vk::DynamicState::eScissorWithCount })
+		.SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
 		.SetDepthStencil(depthStencil)
 		.SetLayout(*m_PipelineLayout)
 		.SetColorFormat(colorFormat)
@@ -469,6 +499,9 @@ void VulkanWindow::InitVulkan() {
 }
 
 void VulkanWindow::DrawFrame() {
+
+	UpdateUBO();
+
 
 
 	int width, height;
@@ -490,14 +523,16 @@ void VulkanWindow::DrawFrame() {
 		m_SwapChainImages.clear();
 
 		auto swapImg = m_SwapChain->getImages();
-		m_SwapChainImages.reserve(swapImg.size());
+		m_SwapChainImages.resize(swapImg.size());
 
 		for (size_t i = 0; i < swapImg.size(); i++) {
 			m_SwapChainImages[i].image = swapImg[i];
+			m_SwapChainImages[i].imageAspectFlags = vk::ImageAspectFlagBits::eColor;
 		}
 
 		m_bFrameBufferResized = false;
 	}
+
 
 
 
@@ -523,7 +558,7 @@ void VulkanWindow::DrawFrame() {
 	//m_ImageFrames[imageIndex].RecordCmdBuffer(imageIndex,m_SwapChainFactory->Extent,rawShaders);
 
 
-	m_CommandBuffers[imageIndex].reset();
+	m_CommandBuffers[imageIndex]->reset();
 	m_CommandBuffers[imageIndex]->begin(vk::CommandBufferBeginInfo());
 
 	ImageFactory::ShiftImageLayout(
@@ -569,8 +604,23 @@ void VulkanWindow::DrawFrame() {
 	}
 
 	m_CommandBuffers[imageIndex]->beginRendering(rendering_info);
-
 	m_CommandBuffers[imageIndex]->bindPipeline(vk::PipelineBindPoint::eGraphics, **m_Pipeline);
+
+	vk::Viewport viewport{};
+	viewport.setWidth(static_cast<float>(width));
+	viewport.setHeight(static_cast<float>(height));
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	m_CommandBuffers[imageIndex]->setViewport(0,viewport);
+
+
+	vk::Rect2D scissor{};
+	scissor.offset = vk::Offset2D{ 0, 0 };
+	scissor.extent = m_SwapChainFactory->Extent;
+
+
+	m_CommandBuffers[imageIndex]->setScissor(0,scissor);
+
 
 	std::vector<vk::DescriptorSet> rawDescriptorSets{};
 	rawDescriptorSets.emplace_back(*(*m_FrameDescriptorSets)[imageIndex]);
@@ -581,7 +631,10 @@ void VulkanWindow::DrawFrame() {
 	for (const auto& mesh: m_Meshes) {
 		m_CommandBuffers[imageIndex]->bindVertexBuffers(0,{mesh.m_VertexBuffer}, mesh.m_VertexOffset);
 		m_CommandBuffers[imageIndex]->bindIndexBuffer(mesh.m_IndexBuffer,0,vk::IndexType::eUint32);
+		m_CommandBuffers[imageIndex]->pushConstants(*m_PipelineLayout,vk::ShaderStageFlagBits::eFragment,0,vk::ArrayProxy<const uint32_t>{mesh.m_TextureIdx});
 		m_CommandBuffers[imageIndex]->drawIndexed(mesh.m_IndexCount,1,0,0,0);
+
+
 	}
 
 	m_CommandBuffers[imageIndex]->endRendering();
@@ -596,7 +649,7 @@ void VulkanWindow::DrawFrame() {
 	ImageFactory::ShiftImageLayout(
 		*m_CommandBuffers[imageIndex],
 		m_DepthImage,
-		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eDepthAttachmentOptimal,
 		vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eNone,
 		vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eNone );
 

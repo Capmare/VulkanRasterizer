@@ -42,12 +42,6 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         &QueuePriority
     );
 
-
-
-    vk::PhysicalDeviceDynamicRenderingFeaturesKHR DynamicRenderingFeatures = {};
-    DynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-
-
     std::vector<const char*> EnabledLayers = {
         "VK_LAYER_KHRONOS_validation"
     };
@@ -70,14 +64,20 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         nullptr
     );
 
+    vk::PhysicalDeviceVulkan13Features Vulkan13Features = {};
+    Vulkan13Features.dynamicRendering = VK_TRUE;
+    Vulkan13Features.synchronization2 = VK_TRUE;
+
     vk::PhysicalDeviceVulkan12Features Vulkan12Features = {};
     Vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    Vulkan12Features.pNext = &Vulkan13Features;
 
     vk::PhysicalDeviceFeatures2 Features{};
     Features.features.samplerAnisotropy = VK_TRUE;
     Features.pNext = &Vulkan12Features;
 
     DeviceCreateInfo.pNext = &Features;
+
 
     try {
         vk::raii::Device Device = PhysicalDevice.createDevice(DeviceCreateInfo);
