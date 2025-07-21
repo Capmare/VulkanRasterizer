@@ -5,6 +5,7 @@
 #ifndef IMAGEFACTORY_H
 #define IMAGEFACTORY_H
 
+#include "AllocationTracker.h"
 #include "vk_mem_alloc.h"
 #include "vulkan/vulkan_raii.hpp"
 
@@ -32,7 +33,8 @@ public:
         const vk::raii::Device &device,
         VmaAllocator allocator,
         const vk::raii::CommandPool &commandPool,
-        const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::ImageAspectFlagBits aspect);
+        const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, AllocationTracker *
+        AllocationTracker);
 
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect);
 

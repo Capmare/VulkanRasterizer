@@ -4,8 +4,10 @@
 
 #include "Buffer.h"
 
+#include "AllocationTracker.h"
+
 void Buffer::Copy(vk::Buffer SourceBuffer, VmaAllocationInfo SourceInfo, vk::Buffer DestBuffer,
-    VmaAllocationInfo DestInfo, vk::Queue Queue, vk::CommandBuffer CommandBuffer) {
+                  VmaAllocationInfo DestInfo, vk::Queue Queue, vk::CommandBuffer CommandBuffer) {
 
     CommandBuffer.reset();
 
@@ -36,7 +38,7 @@ void Buffer::Create(VmaAllocator allocator,
                     VkBuffer &buffer,
                     VmaAllocation &allocation,
                     VmaAllocationInfo &allocInfo,
-                    VmaAllocationCreateFlags flags) {
+                    VmaAllocationCreateFlags flags, AllocationTracker* AllocationTracker, const std::string& AllocName) {
     vk::BufferCreateInfo bufferInfo{};
     bufferInfo.size = size;
     bufferInfo.usage = usage;
@@ -52,6 +54,12 @@ void Buffer::Create(VmaAllocator allocator,
                     &buffer,
                     &allocation,
                     &allocInfo);
+
+    if (AllocationTracker == nullptr) {
+        std::cout << "Failed to use allocation tracker, is nullptr";
+        return;
+    }
+    AllocationTracker->TrackAllocation(allocation,AllocName);
 }
 
 void Buffer::UploadData(VmaAllocator allocator,
@@ -64,6 +72,7 @@ void Buffer::UploadData(VmaAllocator allocator,
     vmaUnmapMemory(allocator, allocation);
 }
 
-void Buffer::Destroy(VmaAllocator allocator, VkBuffer buffer, VmaAllocation allocation) {
+void Buffer::Destroy(VmaAllocator allocator, VkBuffer buffer, VmaAllocation allocation, AllocationTracker* AllocationTracker) {
+    AllocationTracker->UntrackAllocation(allocation);
     vmaDestroyBuffer(allocator, buffer, allocation);
 }

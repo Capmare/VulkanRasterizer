@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include "AllocationTracker.h"
 #include "ImageFrame.h"
 #include "PhysicalDevicePicker.h"
 #include "Renderer.h"
@@ -84,11 +85,13 @@ private:
 	void DrawFrame();
 
 	void MainLoop();
+
 	void Cleanup();
 
 	void UpdateUBO();
 
 	void CreateSurface();
+
 	GLFWwindow* m_Window{};
 
 	std::unique_ptr<InstanceFactory> m_InstanceFactory{};
@@ -156,6 +159,7 @@ private:
 
 	std::vector<Mesh> m_Meshes;
 
+	std::unique_ptr<AllocationTracker> m_AllocationTracker{};
 
 
 };

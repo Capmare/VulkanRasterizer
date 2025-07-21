@@ -10,6 +10,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
+#include "AllocationTracker.h"
 #include "ImageFactory.h"
 
 
@@ -24,8 +25,8 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     vk::DescriptorSetLayout descriptorSetLayout,
     vk::Sampler sampler,
     const vk::raii::CommandPool& CmdPool,
-    std::vector<ImageResource>& textures
-    )
+    std::vector<ImageResource>& textures, AllocationTracker* AllocTracker
+)
 {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path,
@@ -82,13 +83,14 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     if (textureCache.contains(fullPath)) {
                         textureIdx = textureCache[fullPath];
                     } else {
-                        textures.emplace_back(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor));
+                        textures.emplace_back(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker));
 
                         textureCache[fullPath] = textures.size() - 1;
 
                         // Schedule deletion of allocation
                         VmaAllocation allocation = textures.back().allocation;
-                        DeletionQueue.push_back([Allocator, allocation](VmaAllocator alloc) {
+                        DeletionQueue.push_back([Allocator, allocation,AllocTracker](VmaAllocator alloc) {
+		                    AllocTracker->UntrackAllocation(allocation);
                             vmaFreeMemory(alloc, allocation);
                         });
                     }
@@ -98,7 +100,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
             Mesh meshObj = Build_Mesh(
                 Allocator, DeletionQueue, CommandBuffer, GraphicsQueue,
                 device, descriptorPool, descriptorSetLayout,
-                textureIdx, sampler, vertices, indices
+                textureIdx, sampler, vertices, indices, AllocTracker, "Mesh"
             );
 
             meshes.push_back(std::move(meshObj));
@@ -127,7 +129,9 @@ Mesh MeshFactory::Build_Mesh(
     uint32_t ImageIdx,
     vk::Sampler sampler,
     const std::vector<Vertex>& vertices,
-    const std::vector<uint32_t> indices
+    const std::vector<uint32_t> indices,
+    AllocationTracker* AllocationTracker,
+    const std::string& AllocName
 ) {
     Mesh mesh;
 
@@ -144,7 +148,7 @@ Mesh MeshFactory::Build_Mesh(
                    vertexStagingBuffer,
                    vertexStagingAlloc,
                    vertexStagingInfo,
-                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
+                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT, AllocationTracker, "VertexBuffer");
     Buffer::UploadData(Allocator, vertexStagingAlloc, vertices.data(), vertices.size() * sizeof(Vertex));
 
     Buffer::Create(Allocator,
@@ -153,13 +157,13 @@ Mesh MeshFactory::Build_Mesh(
                    VMA_MEMORY_USAGE_AUTO,
                    mesh.m_VertexBuffer,
                    mesh.m_VertexAllocation,
-                   mesh.m_VertexAllocInfo);
+                   mesh.m_VertexAllocInfo,0,AllocationTracker, AllocName);
 
     Buffer::Copy(vertexStagingBuffer, vertexStagingInfo,
                  mesh.m_VertexBuffer, mesh.m_VertexAllocInfo,
                  GraphicsQueue, CommandBuffer);
 
-    Buffer::Destroy(Allocator, vertexStagingBuffer, vertexStagingAlloc);
+    Buffer::Destroy(Allocator, vertexStagingBuffer, vertexStagingAlloc, AllocationTracker);
 
     // Create staging and GPU buffers for indices
     VkBuffer indexStagingBuffer;
@@ -172,7 +176,7 @@ Mesh MeshFactory::Build_Mesh(
                    indexStagingBuffer,
                    indexStagingAlloc,
                    indexStagingInfo,
-                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT);
+                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT, AllocationTracker, "StagingBuffer");
     Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(indices[0]));
 
     Buffer::Create(Allocator,
@@ -181,13 +185,13 @@ Mesh MeshFactory::Build_Mesh(
                    VMA_MEMORY_USAGE_AUTO,
                    mesh.m_IndexBuffer,
                    mesh.m_IndexAllocation,
-                   mesh.m_IndexAllocInfo);
+                   mesh.m_IndexAllocInfo,0, AllocationTracker, "IndexBuffer");
 
     Buffer::Copy(indexStagingBuffer, indexStagingInfo,
                  mesh.m_IndexBuffer, mesh.m_IndexAllocInfo,
                  GraphicsQueue, CommandBuffer);
 
-    Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc);
+    Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc, AllocationTracker);
 
 
     // Setup deletion queue
@@ -198,9 +202,9 @@ Mesh MeshFactory::Build_Mesh(
     // auto ub = mesh.m_UniformBuffer;
     // auto ua = mesh.m_UniformAllocation;
 
-    DeletionQueue.emplace_back([vb, va, ib, ia](VmaAllocator allocator) {
-        Buffer::Destroy(allocator, vb, va);
-        Buffer::Destroy(allocator, ib, ia);
+    DeletionQueue.emplace_back([vb, va, ib, ia,AllocationTracker](VmaAllocator allocator) {
+        Buffer::Destroy(allocator, vb, va, AllocationTracker);
+        Buffer::Destroy(allocator, ib, ia, AllocationTracker);
     });
 
     return mesh;

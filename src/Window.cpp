@@ -57,10 +57,12 @@ void VulkanWindow::Cleanup() {
 		m_VmaAllocatorsDeletionQueue.pop_back();
 	}
 
+	m_AllocationTracker->PrintAllocations();
+
 	m_ImageResource.clear();
 
-	vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
 	vkDestroyImageView(**m_Device,m_DepthImage.imageView,nullptr);
+
 
 	vmaDestroyAllocator(m_VmaAllocator);
 
@@ -125,6 +127,9 @@ void VulkanWindow::CreateVmaAllocator() {
 }
 
 void VulkanWindow::InitVulkan() {
+
+	m_AllocationTracker = std::make_unique<AllocationTracker>();
+
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
 	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
 	CreateSurface();
@@ -152,7 +157,9 @@ void VulkanWindow::InitVulkan() {
 				 m_UniformBuffer,
 				 m_UniformAllocation,
 				 m_UniformAllocInfo,
-				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
+
+
 
 
 	vk::SamplerCreateInfo samplerInfo = {
@@ -173,6 +180,7 @@ void VulkanWindow::InitVulkan() {
 		vk::BorderColor::eIntOpaqueBlack,
 		VK_FALSE
 	};
+
 
 	m_Sampler = std::make_unique<vk::raii::Sampler>(*m_Device,samplerInfo);
 
@@ -242,6 +250,15 @@ void VulkanWindow::InitVulkan() {
 	m_DepthImage.image = std::move(img);
 	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth);
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
+	m_AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
+
+	m_VmaAllocatorsDeletionQueue.push_back([&](VmaAllocator) {
+		m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
+
+		vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
+
+	});
+
 
 	CreateShaderModules();
 	CreateDescriptorSets();
@@ -256,6 +273,12 @@ void VulkanWindow::InitVulkan() {
 		vmaFreeMemory(allocator, allocation);
 	});
 	}*/
+
+	m_VmaAllocatorsDeletionQueue.push_back([&](VmaAllocator) {
+		vmaFreeMemory(m_VmaAllocator, m_UniformAllocation);
+	});
+
+	m_AllocationTracker->PrintAllocations();
 }
 
 void VulkanWindow::DrawFrame() {
@@ -460,7 +483,7 @@ void VulkanWindow::LoadMesh() {
 											m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
 											**m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
 											*m_DescriptorPool,*m_FrameDescriptorSetLayout,
-											*m_Sampler,*m_CmdPool, m_ImageResource);
+											*m_Sampler,*m_CmdPool, m_ImageResource, m_AllocationTracker.get());
 }
 
 void VulkanWindow::CreateDescriptorPools() {

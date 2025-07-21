@@ -16,7 +16,7 @@ ImageResource ImageFactory::LoadTexture(
     const vk::raii::Device &device,
     VmaAllocator allocator,
     const vk::raii::CommandPool &commandPool,
-    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect)
+    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, AllocationTracker* AllocationTracker)
 {
 
     ImageResource imgResource{};
@@ -48,7 +48,7 @@ ImageResource ImageFactory::LoadTexture(
         VMA_MEMORY_USAGE_CPU_ONLY,
         stagingBuffer,
         stagingAlloc,
-        stagingInfo);
+        stagingInfo, 0,AllocationTracker,filename + "StagingBuffer");
 
     Buffer::UploadData(allocator, stagingAlloc, pixels, static_cast<size_t>(imageSize));
     stbi_image_free(pixels);
@@ -136,7 +136,7 @@ ImageResource ImageFactory::LoadTexture(
     graphicsQueue.submit(submitInfo);
     graphicsQueue.waitIdle();
 
-    Buffer::Destroy(allocator, stagingBuffer, stagingAlloc);
+    Buffer::Destroy(allocator, stagingBuffer, stagingAlloc, AllocationTracker);
 
     // === Create image view ===
     vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect);
