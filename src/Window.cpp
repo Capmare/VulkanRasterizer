@@ -102,8 +102,7 @@ void VulkanWindow::Run()
 	Cleanup();
 }
 
-void VulkanWindow::InitWindow()
-{
+void VulkanWindow::InitWindow() {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -112,20 +111,10 @@ void VulkanWindow::InitWindow()
 	m_Window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	glfwSetWindowUserPointer(m_Window, this);
 	glfwSetFramebufferSizeCallback(m_Window, FramebufferResizeCallback);
-
-
-
 }
 
-void VulkanWindow::InitVulkan() {
-	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
-	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
-	CreateSurface();
-	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
 
-	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
-
-
+void VulkanWindow::CreateVmaAllocator() {
 	VmaAllocatorCreateInfo vmaCreateInfo{};
 	vmaCreateInfo.device = **m_Device;
 	vmaCreateInfo.instance = **m_Instance;
@@ -133,6 +122,16 @@ void VulkanWindow::InitVulkan() {
 	vmaCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 	vmaCreateInfo.pAllocationCallbacks = nullptr;
 	vmaCreateAllocator(&vmaCreateInfo, &m_VmaAllocator);
+}
+
+void VulkanWindow::InitVulkan() {
+	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
+	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
+	CreateSurface();
+	m_PhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>(PhysicalDevicePicker::ChoosePhysicalDevice(*m_Instance));
+	m_Device = std::make_unique<vk::raii::Device>(m_LogicalDeviceFactory->Build_Device(*m_PhysicalDevice, m_Surface));
+
+	CreateVmaAllocator();
 
 	m_DescriptorSetFactory = std::make_unique<DescriptorSetFactory>(*m_Device);
 	m_FrameDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
@@ -145,8 +144,6 @@ void VulkanWindow::InitVulkan() {
 
 	m_DescriptorSetFactory->ResetFactory();
 
-
-	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
 
 	Buffer::Create(m_VmaAllocator,
 				 sizeof(MVP),
@@ -179,30 +176,6 @@ void VulkanWindow::InitVulkan() {
 
 	m_Sampler = std::make_unique<vk::raii::Sampler>(*m_Device,samplerInfo);
 
-
-
-	//VkAllocationCallbacks myDebugCallbacks = {};
-	//myDebugCallbacks.pUserData = nullptr;
-	//myDebugCallbacks.pfnAllocation = [](void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
-	//	void* ptr = _aligned_malloc(size, alignment);
-	//	printf("Allocated %zu bytes at %p\n", size, ptr);
-	//	return ptr;
-	//};
-	//myDebugCallbacks.pfnReallocation = [](void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope scope) -> void* {
-	//	void* ptr = _aligned_realloc(pOriginal, size, alignment);
-	//	printf("Reallocated %zu bytes at %p\n", size, ptr);
-	//	return ptr;
-	//};
-	//myDebugCallbacks.pfnFree = [](void* pUserData, void* pMemory) {
-	//	printf("Freeing memory at %p\n", pMemory);
-	//	_aligned_free(pMemory);
-	//};
-	//myDebugCallbacks.pfnInternalAllocation = nullptr;
-	//myDebugCallbacks.pfnInternalFree = nullptr;
-
-
-
-
 	// Create Swapchain and Depth Image
 	m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
 		m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, WIDTH, HEIGHT)
@@ -215,15 +188,11 @@ void VulkanWindow::InitVulkan() {
 	m_VmaAllocatorsDeletionQueue
 	);
 
-	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
-	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
-	m_RenderFinishedFence = std::make_unique<vk::raii::Fence>(*m_Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
+	CreateSemaphoreAndFences();
 
 	uint32_t QueueIdx = m_LogicalDeviceFactory->FindQueueFamilyIndex(*m_PhysicalDevice, m_Surface, vk::QueueFlagBits::eGraphics);
 	VkQueue rawQueue = *m_Device->getQueue(QueueIdx, 0);
 	m_GraphicsQueue = std::make_unique<vk::raii::Queue>(*m_Device, rawQueue);
-
-
 
 	m_CmdPool = std::make_unique<vk::raii::CommandPool>(m_Renderer->CreateCommandPool(*m_Device, QueueIdx));
 
@@ -236,207 +205,19 @@ void VulkanWindow::InitVulkan() {
 	}
 
 
-	m_MeshFactory = std::make_unique<MeshFactory>();
-
-	vk::DescriptorPoolSize UboPoolSize{};
-	UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
-	UboPoolSize.descriptorCount = 2;
-
-	vk::DescriptorPoolSize SamplerPoolSize{};
-	SamplerPoolSize.type = vk::DescriptorType::eSampler;
-	SamplerPoolSize.descriptorCount = 2;
-
-	vk::DescriptorPoolSize TexturesPoolSize{};
-	TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-	TexturesPoolSize.descriptorCount = 2;
-
-	vk::DescriptorPoolSize PoolSizeArr[] = { UboPoolSize, SamplerPoolSize, TexturesPoolSize };
-
-	vk::DescriptorPoolCreateInfo poolInfo{};
-	poolInfo.maxSets = 4;
-	poolInfo.poolSizeCount = 3;
-	poolInfo.pPoolSizes = PoolSizeArr;
-	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-
-	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
-	m_AuxCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-
-	// Allocate descriptor set
-	vk::DescriptorSetAllocateInfo FrameAllocInfo{};
-	FrameAllocInfo.descriptorPool = *m_DescriptorPool;
-	FrameAllocInfo.descriptorSetCount = 2;
-	FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
-
-	m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,FrameAllocInfo);
-
-
-	// Descriptor buffer info (uniform buffer)
-	vk::DescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = m_UniformBuffer;
-	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(MVP);
-
-	for (auto& ds : *m_FrameDescriptorSets.get()) {
-		vk::WriteDescriptorSet writeInfo{};
-
-		writeInfo.dstSet          = ds;
-		writeInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
-		writeInfo.descriptorCount = static_cast<uint32_t>(1);
-		writeInfo.pImageInfo      = nullptr;
-		writeInfo.pBufferInfo     = &bufferInfo;
-		m_Device->updateDescriptorSets(writeInfo, nullptr);
-
-	}
-
-
-
-
-	auto allocator = m_VmaAllocator;
-
-	for (auto& image : m_ImageResource) {
-		auto allocation = image.allocation;
-		m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
-		vmaFreeMemory(allocator, allocation);
-	});
-	}
-
-	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/scene.gltf",
-	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
-	                                            **m_AuxCmdBuffer,*m_GraphicsQueue,*m_Device,
-	                                            *m_DescriptorPool,*m_FrameDescriptorSetLayout,
-	                                            *m_Sampler,*m_CmdPool, m_ImageResource);
+	CreateDescriptorPools();
+	CreateFrameDescriptorSets();
+	LoadMesh();
 
 
 	m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
-		std::move(
-			m_DescriptorSetFactory
-				->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
-				.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_ImageResource.size())
-				.Build()
+	std::move(
+		m_DescriptorSetFactory
+			->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
+			.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_ImageResource.size())
+			.Build()
 		)
 	);
-	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
-
-	vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
-	GlobalAllocInfo.descriptorPool = *m_DescriptorPool;
-	GlobalAllocInfo.descriptorSetCount = 2;
-	GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
-
-	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
-
-	vk::DescriptorImageInfo SamplerInfo{};
-	SamplerInfo.imageLayout = vk::ImageLayout::eUndefined;
-	SamplerInfo.imageView = VK_NULL_HANDLE;
-	SamplerInfo.sampler = *m_Sampler;
-
-	std::vector<vk::DescriptorImageInfo> TextureImgArr{};
-
-	for (auto& ds: *m_GlobalDescriptorSets.get()) {
-		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
-		descriptorWrites.push_back(vk::WriteDescriptorSet());
-
-		descriptorWrites[0].dstSet = ds;
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = vk::DescriptorType::eSampler;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pImageInfo = &SamplerInfo;
-
-		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
-		for (auto& img : m_ImageResource) {
-			vk::DescriptorImageInfo descriptorImageInfo{};
-			descriptorImageInfo.imageLayout = img.imageLayout;
-			descriptorImageInfo.imageView = img.imageView;
-
-			DescriptorImgInfos.emplace_back(descriptorImageInfo);
-		}
-
-		descriptorWrites.push_back(vk::WriteDescriptorSet());
-		descriptorWrites[1].dstSet = ds;
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
-		descriptorWrites[1].descriptorCount = DescriptorImgInfos.size();
-		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
-
-		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
-	}
-
-
-
-
-	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
-	for (auto& shader : ShaderModules) {
-		m_ShaderModule.emplace_back(std::move(shader));
-	}
-
-	vk::PipelineShaderStageCreateInfo vertexStageInfo{};
-	vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
-	vertexStageInfo.setModule(*m_ShaderModule[0]);
-	vertexStageInfo.setPName("main");
-
-	vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
-	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
-	fragmentStageInfo.setModule(*m_ShaderModule[1]);
-	fragmentStageInfo.setPName("main");
-
-	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
-
-	vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
-	inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-	vk::PipelineRasterizationStateCreateInfo rasterizer{};
-	rasterizer.depthClampEnable = VK_FALSE;
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;
-	rasterizer.polygonMode = vk::PolygonMode::eFill;
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = vk::CullModeFlagBits::eNone;
-	rasterizer.frontFace = vk::FrontFace::eClockwise;
-	rasterizer.depthBiasEnable = VK_FALSE;
-
-	vk::PipelineMultisampleStateCreateInfo multisampling{};
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
-
-	vk::PipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = vk::CompareOp::eLess;
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.stencilTestEnable = VK_FALSE;
-
-	vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask =
-		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-	colorBlendAttachment.blendEnable = VK_FALSE;
-
-	std::vector<vk::DescriptorSetLayout> DescriptorSetLayouts{*m_FrameDescriptorSetLayout,*m_GlobalDescriptorSetLayout};
-
-	vk::PushConstantRange pushConstantRange{};
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(uint32_t);
-	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-	vk::PipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.setLayoutCount = DescriptorSetLayouts.size();
-	layoutInfo.pSetLayouts = DescriptorSetLayouts.data();
-	layoutInfo.pushConstantRangeCount = 1;
-	layoutInfo.pPushConstantRanges = &pushConstantRange;
-
-	m_PipelineLayout = std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo);
-
-
 
 	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
@@ -453,8 +234,6 @@ void VulkanWindow::InitVulkan() {
 	imageInfo.samples = vk::SampleCountFlagBits::e1;
 	imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-
-
 	VkImage img = VK_NULL_HANDLE;
 	VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
 	VmaAllocationCreateInfo vmaAllocationCreateInfo{};
@@ -464,38 +243,19 @@ void VulkanWindow::InitVulkan() {
 	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth);
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 
-	vk::PipelineViewportStateCreateInfo viewportState{};
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = nullptr;
+	CreateShaderModules();
+	CreateDescriptorSets();
+	CreatePipelineLayout();
+	CreateGraphicsPipeline();
+	CreateCommandBuffers();
 
-	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
 
-	m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
-		->SetShaderStages(shaderStages)
-		.SetVertexInput(vertexInputInfo)
-		.SetInputAssembly(inputAssembly)
-		.SetRasterizer(rasterizer)
-		.SetMultisampling(multisampling)
-		.SetColorBlendAttachment(colorBlendAttachment)
-		.SetViewportState(viewportState)
-		.SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
-		.SetDepthStencil(depthStencil)
-		.SetLayout(*m_PipelineLayout)
-		.SetColorFormat(colorFormat)
-		.SetDepthFormat(depthFormat)
-		.Build());
-
-	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
-
-	// for (uint32_t i = 0; i < m_Images.size(); ++i) {
-	// 	m_ImageFrames.emplace_back(m_Images, m_SwapChainFactory.get(), m_CommandBuffers[i], m_Meshes);
-	// 	m_ImageFrames.back().SetPipeline(**m_Pipeline);
-	// 	m_ImageFrames.back().SetPipelineLayout(**m_PipelineLayout);
-	// 	m_ImageFrames.back().SetDepthImage(m_DepthImageFactory->GetView(), m_DepthImageFactory->GetFormat());
-	// }
+	/*for (auto& image : m_ImageResource) {
+		auto allocation = image.allocation;
+		m_VmaAllocatorsDeletionQueue.push_back([allocator, allocation](VmaAllocator) {
+		vmaFreeMemory(allocator, allocation);
+	});
+	}*/
 }
 
 void VulkanWindow::DrawFrame() {
@@ -685,6 +445,252 @@ void VulkanWindow::DrawFrame() {
 
 
 }
+
+void VulkanWindow::CreateSemaphoreAndFences() {
+	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
+	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
+	m_RenderFinishedFence = std::make_unique<vk::raii::Fence>(*m_Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));
+}
+
+void VulkanWindow::LoadMesh() {
+	m_MeshFactory = std::make_unique<MeshFactory>();
+	m_MeshCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+
+	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/scene.gltf",
+											m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
+											**m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
+											*m_DescriptorPool,*m_FrameDescriptorSetLayout,
+											*m_Sampler,*m_CmdPool, m_ImageResource);
+}
+
+void VulkanWindow::CreateDescriptorPools() {
+	vk::DescriptorPoolSize UboPoolSize{};
+	UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
+	UboPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize SamplerPoolSize{};
+	SamplerPoolSize.type = vk::DescriptorType::eSampler;
+	SamplerPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize TexturesPoolSize{};
+	TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
+	TexturesPoolSize.descriptorCount = 2;
+
+	vk::DescriptorPoolSize PoolSizeArr[] = { UboPoolSize, SamplerPoolSize, TexturesPoolSize };
+
+	vk::DescriptorPoolCreateInfo poolInfo{};
+	poolInfo.maxSets = 4;
+	poolInfo.poolSizeCount = 3;
+	poolInfo.pPoolSizes = PoolSizeArr;
+	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+
+	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
+}
+
+void VulkanWindow::CreateFrameDescriptorSets() {
+
+	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
+
+	// Allocate descriptor set
+	vk::DescriptorSetAllocateInfo FrameAllocInfo{};
+	FrameAllocInfo.descriptorPool = *m_DescriptorPool;
+	FrameAllocInfo.descriptorSetCount = 2;
+	FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
+
+	m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,FrameAllocInfo);
+
+	// Descriptor buffer info (uniform buffer)
+	vk::DescriptorBufferInfo bufferInfo{};
+	bufferInfo.buffer = m_UniformBuffer;
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(MVP);
+
+	for (auto& ds : *m_FrameDescriptorSets.get()) {
+		vk::WriteDescriptorSet writeInfo{};
+
+		writeInfo.dstSet          = ds;
+		writeInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
+		writeInfo.descriptorCount = static_cast<uint32_t>(1);
+		writeInfo.pImageInfo      = nullptr;
+		writeInfo.pBufferInfo     = &bufferInfo;
+		m_Device->updateDescriptorSets(writeInfo, nullptr);
+
+	}
+}
+
+void VulkanWindow::CreateShaderModules() {
+	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
+	for (auto& shader : ShaderModules) {
+		m_ShaderModule.emplace_back(std::move(shader));
+	}
+}
+
+void VulkanWindow::CreateDescriptorSets() {
+
+
+	// global descriptor set
+
+
+	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
+
+	vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
+	GlobalAllocInfo.descriptorPool = *m_DescriptorPool;
+	GlobalAllocInfo.descriptorSetCount = 2;
+	GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
+
+	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
+
+	vk::DescriptorImageInfo SamplerInfo{};
+	SamplerInfo.imageLayout = vk::ImageLayout::eUndefined;
+	SamplerInfo.imageView = VK_NULL_HANDLE;
+	SamplerInfo.sampler = *m_Sampler;
+
+	for (auto& ds: *m_GlobalDescriptorSets.get()) {
+		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
+		descriptorWrites.push_back(vk::WriteDescriptorSet());
+
+		descriptorWrites[0].dstSet = ds;
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = vk::DescriptorType::eSampler;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pImageInfo = &SamplerInfo;
+
+		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
+		for (auto& img : m_ImageResource) {
+			vk::DescriptorImageInfo descriptorImageInfo{};
+			descriptorImageInfo.imageLayout = img.imageLayout;
+			descriptorImageInfo.imageView = img.imageView;
+
+			DescriptorImgInfos.emplace_back(descriptorImageInfo);
+		}
+
+		descriptorWrites.push_back(vk::WriteDescriptorSet());
+		descriptorWrites[1].dstSet = ds;
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
+		descriptorWrites[1].descriptorCount = DescriptorImgInfos.size();
+		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
+
+		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
+	}
+}
+
+void VulkanWindow::CreatePipelineLayout() {
+	std::vector<vk::DescriptorSetLayout> DescriptorSetLayouts{*m_FrameDescriptorSetLayout,*m_GlobalDescriptorSetLayout};
+
+	vk::PushConstantRange pushConstantRange{};
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(uint32_t);
+	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+	vk::PipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.setLayoutCount = DescriptorSetLayouts.size();
+	layoutInfo.pSetLayouts = DescriptorSetLayouts.data();
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	m_PipelineLayout = std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo);
+
+}
+
+void VulkanWindow::CreateGraphicsPipeline() {
+	m_GraphicsPipelineFactory = std::make_unique<GraphicsPipelineFactory>(*m_Device);
+
+	// depth stencil
+	vk::PipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = vk::CompareOp::eLess;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
+	// pipeline color attachment
+	vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask =
+		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	colorBlendAttachment.blendEnable = VK_FALSE;
+
+	// sampling
+	vk::PipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+
+	// rasterizer
+	vk::PipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = vk::PolygonMode::eFill;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+	rasterizer.frontFace = vk::FrontFace::eClockwise;
+	rasterizer.depthBiasEnable = VK_FALSE;
+
+	// input assembly
+	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+	// vertex input info
+	vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+	// shader stages
+	vk::PipelineShaderStageCreateInfo vertexStageInfo{};
+	vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
+	vertexStageInfo.setModule(*m_ShaderModule[0]);
+	vertexStageInfo.setPName("main");
+
+	vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
+	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
+	fragmentStageInfo.setModule(*m_ShaderModule[1]);
+	fragmentStageInfo.setPName("main");
+
+	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
+
+	// viewport state
+	vk::PipelineViewportStateCreateInfo viewportState{};
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = nullptr;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = nullptr;
+
+	// color and depth format
+	vk::Format colorFormat = m_SwapChainFactory->Format.format;
+	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
+
+	m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
+		->SetShaderStages(shaderStages)
+		.SetVertexInput(vertexInputInfo)
+		.SetInputAssembly(inputAssembly)
+		.SetRasterizer(rasterizer)
+		.SetMultisampling(multisampling)
+		.SetColorBlendAttachment(colorBlendAttachment)
+		.SetViewportState(viewportState)
+		.SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
+		.SetDepthStencil(depthStencil)
+		.SetLayout(*m_PipelineLayout)
+		.SetColorFormat(colorFormat)
+		.SetDepthFormat(depthFormat)
+		.Build());
+
+}
+
+void VulkanWindow::CreateCommandBuffers() {
+	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+	m_CommandBuffers.emplace_back(std::make_unique<vk::raii::CommandBuffer>(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
+}
+
+
+
 
 
 

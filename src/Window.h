@@ -58,7 +58,28 @@ public:
 
 private:
 	void InitWindow();
+
+	void CreateVmaAllocator();
+
 	void InitVulkan();
+
+	void CreateSemaphoreAndFences();
+
+	void LoadMesh();
+
+	void CreateDescriptorPools();
+
+	void CreateFrameDescriptorSets();
+
+	void CreateShaderModules();
+
+	void CreateDescriptorSets();
+
+	void CreatePipelineLayout();
+
+	void CreateGraphicsPipeline();
+
+	void CreateCommandBuffers();
 
 	void DrawFrame();
 
@@ -104,7 +125,7 @@ private:
 	std::unique_ptr<vk::raii::Sampler> m_Sampler;
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
-	std::unique_ptr<vk::raii::CommandBuffer> m_AuxCmdBuffer;
+	std::unique_ptr<vk::raii::CommandBuffer> m_MeshCmdBuffer;
 
 	std::unique_ptr<vk::raii::DescriptorSetLayout> m_FrameDescriptorSetLayout;
 	std::unique_ptr<vk::raii::DescriptorSetLayout> m_GlobalDescriptorSetLayout;
