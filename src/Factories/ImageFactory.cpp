@@ -11,7 +11,7 @@
 
 #include "stb_image.h"
 
-ImageResource ImageFactory::LoadTexture(
+ImageResource ImageFactory::LoadTexture(Buffer* buff,
     const std::string &filename,
     const vk::raii::Device &device,
     VmaAllocator allocator,
@@ -37,20 +37,11 @@ ImageResource ImageFactory::LoadTexture(
 
     vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
-    // === Create staging buffer ===
-    VkBuffer stagingBuffer;
-    VmaAllocation stagingAlloc;
-    VmaAllocationInfo stagingInfo;
-    Buffer::Create(
-        allocator,
-        imageSize,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        VMA_MEMORY_USAGE_CPU_ONLY,
-        stagingBuffer,
-        stagingAlloc,
-        stagingInfo, 0,AllocationTracker,filename + "StagingBuffer");
 
-    Buffer::UploadData(allocator, stagingAlloc, pixels, static_cast<size_t>(imageSize));
+    BufferInfo StagingBuffer = buff->CreateMapped(allocator,imageSize,vk::BufferUsageFlagBits::eTransferSrc,VMA_MEMORY_USAGE_CPU_ONLY,0,AllocationTracker,filename + "StagingBuffer");
+
+
+    Buffer::UploadData(StagingBuffer, pixels, static_cast<size_t>(imageSize));
     stbi_image_free(pixels);
 
     // === Create vk::raii::Image ===
@@ -66,7 +57,7 @@ ImageResource ImageFactory::LoadTexture(
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    vk::raii::Image textureImage(device, imageInfo);
+    vk::raii::Image textureImage(*device.createImage(imageInfo));
 
     imgResource.image = textureImage;
 
@@ -93,7 +84,7 @@ ImageResource ImageFactory::LoadTexture(
             *commandPool,
             vk::CommandBufferLevel::ePrimary,
             1
-        }).front());
+        })->front());
 
     commandBuffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
@@ -115,7 +106,7 @@ ImageResource ImageFactory::LoadTexture(
 
 
     commandBuffer.copyBufferToImage(
-        stagingBuffer,
+        StagingBuffer.m_Buffer,
         *textureImage,
         vk::ImageLayout::eTransferDstOptimal,
         copyRegion);
@@ -136,7 +127,7 @@ ImageResource ImageFactory::LoadTexture(
     graphicsQueue.submit(submitInfo);
     graphicsQueue.waitIdle();
 
-    Buffer::Destroy(allocator, stagingBuffer, stagingAlloc, AllocationTracker);
+    Buffer::Destroy(allocator, StagingBuffer.m_Buffer, StagingBuffer.m_Allocation, AllocationTracker);
 
     // === Create image view ===
     vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect, AllocationTracker, "textureImageView" + filename);

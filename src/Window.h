@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "Buffer.h"
 #include "ResourceTracker.h"
 #include "ImageFrame.h"
 #include "Renderer.h"
@@ -146,9 +147,8 @@ private:
 	std::vector<ImageResource> m_ImageResource{};
 
 
-	VkBuffer m_UniformBuffer{};
-	VmaAllocation m_UniformAllocation{};
-	VmaAllocationInfo m_UniformAllocInfo{};
+	BufferInfo m_UniformBufferInfo{};
+
 
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
@@ -159,5 +159,6 @@ private:
 
 	std::unique_ptr<ResourceTracker> m_AllocationTracker{};
 
+	std::unique_ptr<Buffer> m_Buffer{};
 
 };

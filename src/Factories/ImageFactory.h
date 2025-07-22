@@ -5,6 +5,7 @@
 #ifndef IMAGEFACTORY_H
 #define IMAGEFACTORY_H
 
+#include "Buffer.h"
 #include "ResourceTracker.h"
 #include "vk_mem_alloc.h"
 #include "vulkan/vulkan_raii.hpp"
@@ -29,12 +30,12 @@ public:
     ImageFactory& operator=(ImageFactory&&) noexcept = delete;
 
     static ImageResource LoadTexture(
+        Buffer *buff,
         const std::string &filename,
         const vk::raii::Device &device,
         VmaAllocator allocator,
-        const vk::raii::CommandPool &commandPool,
-        const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, ResourceTracker *
-        AllocationTracker);
+        const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::
+        ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
 
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker *
                                        ResourceTracker, const std::string &Name);

@@ -21,9 +21,6 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     const vk::CommandBuffer &CommandBuffer,
     const vk::raii::Queue& GraphicsQueue,
     vk::raii::Device &device,
-    vk::DescriptorPool descriptorPool,
-    vk::DescriptorSetLayout descriptorSetLayout,
-    vk::Sampler sampler,
     const vk::raii::CommandPool& CmdPool,
     std::vector<ImageResource>& textures, ResourceTracker* AllocTracker
 )
@@ -45,14 +42,14 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     std::vector<Mesh> meshes;
 
     std::function<void(aiNode*, const aiScene*)> ProcessNode;
-    ProcessNode = [&](aiNode* node, const aiScene* scene) {
+    ProcessNode = [&](aiNode* node, const aiScene* currentScene) {
         for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+            aiMesh* mesh = currentScene->mMeshes[node->mMeshes[i]];
+            aiMaterial* material = currentScene->mMaterials[mesh->mMaterialIndex];
 
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
-            aiMatrix4x4 transform = scene->mRootNode->mTransformation;
+            aiMatrix4x4 transform = currentScene->mRootNode->mTransformation;
             for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
                 Vertex vert{};
                 aiVector3D const aiPosition = transform * mesh->mVertices[v];
@@ -83,7 +80,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     if (textureCache.contains(fullPath)) {
                         textureIdx = textureCache[fullPath];
                     } else {
-                        textures.emplace_back(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker));
+                        textures.emplace_back(ImageFactory::LoadTexture(m_MeshBuffer.get(), fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker));
 
                         textureCache[fullPath] = static_cast<uint32_t>(textures.size() - 1);
 
@@ -102,15 +99,15 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
             Mesh meshObj = Build_Mesh(
                 Allocator, DeletionQueue, CommandBuffer, GraphicsQueue,
-                device, descriptorPool, descriptorSetLayout,
-                textureIdx, sampler, vertices, indices, AllocTracker, "Mesh"
+                vertices, indices, AllocTracker,
+                "Mesh"
             );
 
             meshes.push_back(meshObj);
         }
 
         for (unsigned int i = 0; i < node->mNumChildren; ++i)
-            ProcessNode(node->mChildren[i], scene);
+            ProcessNode(node->mChildren[i], currentScene);
     };
 
     ProcessNode(scene->mRootNode, scene);
@@ -126,82 +123,62 @@ Mesh MeshFactory::Build_Mesh(
     std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
     const vk::CommandBuffer &CommandBuffer,
     vk::Queue GraphicsQueue,
-    vk::raii::Device &device,
-    vk::DescriptorPool descriptorPool,
-    vk::DescriptorSetLayout descriptorSetLayout,
-    uint32_t ImageIdx,
-    vk::Sampler sampler,
     const std::vector<Vertex>& vertices,
     const std::vector<uint32_t> indices,
     ResourceTracker* AllocationTracker,
     const std::string& AllocName
 ) {
-    Mesh mesh;
+    Mesh mesh{};
 
     mesh.m_IndexCount = static_cast<uint32_t>(indices.size());
 
     // Create staging and GPU buffers for vertices
-    VkBuffer vertexStagingBuffer;
-    VmaAllocation vertexStagingAlloc;
-    VmaAllocationInfo vertexStagingInfo{};
-    Buffer::Create(Allocator,
-                   vertices.size() * sizeof(Vertex),
-                   vk::BufferUsageFlagBits::eTransferSrc,
-                   VMA_MEMORY_USAGE_AUTO,
-                   vertexStagingBuffer,
-                   vertexStagingAlloc,
-                   vertexStagingInfo,
-                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT, AllocationTracker, "VertexBuffer");
-    Buffer::UploadData(Allocator, vertexStagingAlloc, vertices.data(), vertices.size() * sizeof(Vertex));
+    BufferInfo VertexStagingBuffer = m_MeshBuffer->CreateMapped(Allocator,vertices.size() * sizeof(Vertex),
+        vk::BufferUsageFlagBits::eTransferSrc,
+        VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT,
+        AllocationTracker,"VertexBuffer");
 
-    Buffer::Create(Allocator,
+    Buffer::UploadData(VertexStagingBuffer, vertices.data(), vertices.size() * sizeof(Vertex));
+
+    mesh.m_VertexBufferInfo = m_MeshBuffer->CreateMapped(Allocator,
                    vertices.size() * sizeof(Vertex),
                    vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                   VMA_MEMORY_USAGE_AUTO,
-                   mesh.m_VertexBuffer,
-                   mesh.m_VertexAllocation,
-                   mesh.m_VertexAllocInfo,0,AllocationTracker, AllocName);
+                   VMA_MEMORY_USAGE_AUTO,0,AllocationTracker,AllocName);
 
-    Buffer::Copy(vertexStagingBuffer, vertexStagingInfo,
-                 mesh.m_VertexBuffer, mesh.m_VertexAllocInfo,
+
+    Buffer::Copy(VertexStagingBuffer.m_Buffer, VertexStagingBuffer.m_AllocInfo,
+                 mesh.m_VertexBufferInfo.m_Buffer, mesh.m_VertexBufferInfo.m_AllocInfo,
                  GraphicsQueue, CommandBuffer);
 
-    Buffer::Destroy(Allocator, vertexStagingBuffer, vertexStagingAlloc, AllocationTracker);
+    Buffer::Destroy(Allocator, VertexStagingBuffer.m_Buffer, VertexStagingBuffer.m_Allocation, AllocationTracker);
 
     // Create staging and GPU buffers for indices
-    VkBuffer indexStagingBuffer;
-    VmaAllocation indexStagingAlloc;
-    VmaAllocationInfo indexStagingInfo{};
-    Buffer::Create(Allocator,
-                   indices.size() * sizeof(indices[0]),
-                   vk::BufferUsageFlagBits::eTransferSrc,
-                   VMA_MEMORY_USAGE_AUTO,
-                   indexStagingBuffer,
-                   indexStagingAlloc,
-                   indexStagingInfo,
-                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT, AllocationTracker, "StagingBuffer");
-    Buffer::UploadData(Allocator, indexStagingAlloc, indices.data(), indices.size() * sizeof(indices[0]));
+    BufferInfo IndexStagingBuffer = m_MeshBuffer->CreateMapped(Allocator,indices.size() * sizeof(indices[0]),
+        vk::BufferUsageFlagBits::eTransferSrc,
+        VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT,
+        AllocationTracker,"IndexStagingBuffer");
 
-    Buffer::Create(Allocator,
-                   indices.size() * sizeof(indices[0]),
-                   vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                   VMA_MEMORY_USAGE_AUTO,
-                   mesh.m_IndexBuffer,
-                   mesh.m_IndexAllocation,
-                   mesh.m_IndexAllocInfo,0, AllocationTracker, "IndexBuffer");
+    Buffer::UploadData(IndexStagingBuffer, indices.data(), indices.size() * sizeof(indices[0]));
 
-    Buffer::Copy(indexStagingBuffer, indexStagingInfo,
-                 mesh.m_IndexBuffer, mesh.m_IndexAllocInfo,
+    mesh.m_IndexBufferInfo = m_MeshBuffer->CreateMapped(
+        Allocator,indices.size() * sizeof(indices[0]),
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        VMA_MEMORY_USAGE_AUTO,
+        0, AllocationTracker,"IndexBuffer");
+
+
+    Buffer::Copy(IndexStagingBuffer.m_Buffer, IndexStagingBuffer.m_AllocInfo,
+                 mesh.m_IndexBufferInfo.m_Buffer, mesh.m_IndexBufferInfo.m_AllocInfo,
                  GraphicsQueue, CommandBuffer);
 
-    Buffer::Destroy(Allocator, indexStagingBuffer, indexStagingAlloc, AllocationTracker);
+    Buffer::Destroy(Allocator, IndexStagingBuffer.m_Buffer, IndexStagingBuffer.m_Allocation, AllocationTracker);
 
 
     // Setup deletion queue
-    auto vb = mesh.m_VertexBuffer;
-    auto va = mesh.m_VertexAllocation;
-    auto ib = mesh.m_IndexBuffer;
-    auto ia = mesh.m_IndexAllocation;
+    auto vb = mesh.m_VertexBufferInfo.m_Buffer;
+    auto va = mesh.m_VertexBufferInfo.m_Allocation;
+    auto ib = mesh.m_IndexBufferInfo.m_Buffer;
+    auto ia = mesh.m_IndexBufferInfo.m_Allocation;
     // auto ub = mesh.m_UniformBuffer;
     // auto ua = mesh.m_UniformAllocation;
 

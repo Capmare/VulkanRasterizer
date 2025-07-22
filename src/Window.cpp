@@ -87,7 +87,7 @@ void VulkanWindow::UpdateUBO() {
 								1000.0f);
 	ubo.proj[1][1] *= -1;
 
-	Buffer::UploadData(m_VmaAllocator,m_UniformAllocation,&ubo,sizeof(ubo));
+	Buffer::UploadData(m_UniformBufferInfo,&ubo,sizeof(ubo));
 
 }
 
@@ -129,6 +129,7 @@ void VulkanWindow::CreateVmaAllocator() {
 
 void VulkanWindow::InitVulkan() {
 
+	m_Buffer = std::make_unique<Buffer>();
 	m_AllocationTracker = std::make_unique<ResourceTracker>();
 
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
@@ -150,18 +151,10 @@ void VulkanWindow::InitVulkan() {
 
 	m_DescriptorSetFactory->ResetFactory();
 
-
-	Buffer::Create(m_VmaAllocator,
-				 sizeof(MVP),
-				 vk::BufferUsageFlagBits::eUniformBuffer,
-				 VMA_MEMORY_USAGE_CPU_TO_GPU,
-				 m_UniformBuffer,
-				 m_UniformAllocation,
-				 m_UniformAllocInfo,
-				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
-
-
-
+	m_UniformBufferInfo = m_Buffer->CreateMapped(m_VmaAllocator,sizeof(MVP),
+		vk::BufferUsageFlagBits::eUniformBuffer,
+		VMA_MEMORY_USAGE_CPU_TO_GPU,
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
 
 
 	vk::SamplerCreateInfo samplerInfo = {
@@ -278,7 +271,7 @@ void VulkanWindow::InitVulkan() {
 	}*/
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
-		Buffer::Destroy(m_VmaAllocator,m_UniformBuffer,m_UniformAllocation,m_AllocationTracker.get());
+		Buffer::Destroy(m_VmaAllocator,m_UniformBufferInfo.m_Buffer,m_UniformBufferInfo.m_Allocation,m_AllocationTracker.get());
 	});
 
 	m_AllocationTracker->PrintAllocations();
@@ -419,8 +412,8 @@ void VulkanWindow::DrawFrame() {
 	m_CommandBuffers[imageIndex]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics,*m_PipelineLayout,0,rawDescriptorSets,nullptr);
 
 	for (const auto& mesh: m_Meshes) {
-		m_CommandBuffers[imageIndex]->bindVertexBuffers(0,{mesh.m_VertexBuffer}, mesh.m_VertexOffset);
-		m_CommandBuffers[imageIndex]->bindIndexBuffer(mesh.m_IndexBuffer,0,vk::IndexType::eUint32);
+		m_CommandBuffers[imageIndex]->bindVertexBuffers(0,{mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
+		m_CommandBuffers[imageIndex]->bindIndexBuffer(mesh.m_IndexBufferInfo.m_Buffer,0,vk::IndexType::eUint32);
 		m_CommandBuffers[imageIndex]->pushConstants(*m_PipelineLayout,vk::ShaderStageFlagBits::eFragment,0,vk::ArrayProxy<const uint32_t>{mesh.m_TextureIdx});
 		m_CommandBuffers[imageIndex]->drawIndexed(mesh.m_IndexCount,1,0,0,0);
 
@@ -490,10 +483,10 @@ void VulkanWindow::LoadMesh() {
 	m_MeshCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
 
 	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/scene.gltf",
-											m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
-											**m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
-											*m_DescriptorPool,*m_FrameDescriptorSetLayout,
-											*m_Sampler,*m_CmdPool, m_ImageResource, m_AllocationTracker.get());
+	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
+	                                            **m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
+	                                            *m_CmdPool,m_ImageResource,
+	                                            m_AllocationTracker.get());
 }
 
 void VulkanWindow::CreateDescriptorPools() {
@@ -534,7 +527,7 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 
 	// Descriptor buffer info (uniform buffer)
 	vk::DescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = m_UniformBuffer;
+	bufferInfo.buffer = m_UniformBufferInfo.m_Buffer;
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(MVP);
 

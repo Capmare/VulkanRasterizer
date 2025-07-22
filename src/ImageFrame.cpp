@@ -50,8 +50,8 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::BindPipeline(vk::Pipeline pi
 }
 
 ImageFrameCommandFactory& ImageFrameCommandFactory::DrawMesh(const Mesh& mesh, const vk::raii::DescriptorSets& descriptorSets) {
-    m_CommandBuffer.bindVertexBuffers2(0, {mesh.m_VertexBuffer}, mesh.m_VertexOffset);
-    m_CommandBuffer.bindIndexBuffer(mesh.m_IndexBuffer, 0, vk::IndexType::eUint16);
+    m_CommandBuffer.bindVertexBuffers2(0, {mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
+    m_CommandBuffer.bindIndexBuffer(mesh.m_VertexBufferInfo.m_Buffer, 0, vk::IndexType::eUint16);
 
     std::vector<vk::DescriptorSet> rawDescriptorSets{};
     for (auto& ds: descriptorSets) {

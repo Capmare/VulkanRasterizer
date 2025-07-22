@@ -43,14 +43,11 @@ struct Vertex {
 
 struct Mesh
 {
-    VkBuffer m_VertexBuffer{};
-    VmaAllocation m_VertexAllocation{};
-    VmaAllocationInfo m_VertexAllocInfo{};
+    BufferInfo m_VertexBufferInfo;
     VkDeviceSize m_VertexOffset{};
 
-    VkBuffer m_IndexBuffer;
-    VmaAllocation m_IndexAllocation;
-    VmaAllocationInfo m_IndexAllocInfo{};
+
+    BufferInfo m_IndexBufferInfo;
     VkDeviceSize m_IndexOffset;
     uint32_t m_IndexCount;
 
@@ -73,20 +70,19 @@ public:
     std::vector<Mesh> LoadModelFromGLTF(const std::string &path, VmaAllocator &Allocator,
                                         std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                                         const vk::CommandBuffer &CommandBuffer, const vk::raii::Queue &GraphicsQueue,
-                                        vk::raii::Device &device, vk::DescriptorPool descriptorPool,
-                                        vk::DescriptorSetLayout descriptorSetLayout, vk::Sampler sampler, const vk::raii::CommandPool &CmdPool, std::vector<
-                                            ImageResource> &textures, class ResourceTracker* AllocTracker);
+                                        vk::raii::Device &device,
+                                        const vk::raii::CommandPool &CmdPool, std::vector<ImageResource> &textures, class ResourceTracker *AllocTracker);
 
     Mesh Build_Mesh(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
-                    const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,
-                    vk::DescriptorPool descriptorPool, vk::DescriptorSetLayout descriptorSetLayout, uint32_t ImageIdx, vk::Sampler sampler, const
-                    std::vector<Vertex> &vertices, std::vector<uint32_t> indices, ResourceTracker *AllocationTracker, const std::string &
-                    AllocName);
+                    const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue,
+                    const std::vector<Vertex> &vertices, std::vector<uint32_t> indices, ResourceTracker *AllocationTracker, const std::
+                    string &AllocName);
 
 
 
 
-
+private:
+    std::unique_ptr<Buffer> m_MeshBuffer = std::make_unique<Buffer>();
 
 };
 
