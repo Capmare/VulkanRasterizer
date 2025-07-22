@@ -29,7 +29,7 @@
 #include "Factories/SwapChainFactory.h"
 
 #include "vma/vk_mem_alloc.h"
-
+#include "Camera.h"
 
 class VulkanWindow
 {
@@ -90,6 +90,13 @@ private:
 	void UpdateUBO();
 
 	void CreateSurface();
+
+	void SetupMouseCallback(GLFWwindow *window);
+
+	void mouse_callback(double xpos, double ypos);
+
+	void ProcessInput(GLFWwindow *window, float deltaTime);
+
 
 	GLFWwindow* m_Window{};
 
@@ -163,5 +170,22 @@ private:
 
 	vk::ImageView m_DepthImageView{};
 	std::vector<vk::ImageView> m_SwapChainImageViews{};
+
+	std::unique_ptr<Camera> m_Camera{};
+
+
+	glm::vec3 cameraPos = glm::vec3(20.f, 0.f, 0.f);
+	glm::vec3 cameraFront = glm::vec3(-1.f, 0.f, 0.f);
+	glm::vec3 cameraUp = glm::vec3(0.f, 1.f, 0.f);
+	glm::vec3 cameraRight = glm::vec3(0.f, 0.f, 1.f);
+
+	float cameraSpeed = 10.0f;
+	float lastFrameTime = 0.f;
+
+
+	double lastX = 400, lastY = 300;
+	bool firstMouse = true;
+	float yaw = -90.0f;  // facing -Z
+	float pitch = 0.0f;
 
 };

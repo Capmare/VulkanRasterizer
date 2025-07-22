@@ -16,6 +16,7 @@
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include "vmaFile.h"
+#include <SDL2/SDL.h>
 
 VulkanWindow::VulkanWindow(vk::raii::Context& context)
 // Factories
@@ -42,8 +43,18 @@ void VulkanWindow::FramebufferResizeCallback(GLFWwindow* window, int , int )
 
 void VulkanWindow::MainLoop()
 {
+	glfwSetInputMode(m_Window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	SetupMouseCallback(m_Window);
+
+
 	while (!glfwWindowShouldClose(m_Window)) {
 		glfwPollEvents();
+
+		auto currentTime = glfwGetTime();
+		float deltaTime = currentTime - lastFrameTime;
+		lastFrameTime = currentTime;
+
+		ProcessInput(m_Window, deltaTime);
 		DrawFrame();
 
 		m_GraphicsQueue->waitIdle();
@@ -80,16 +91,12 @@ void VulkanWindow::Cleanup() {
 
 void VulkanWindow::UpdateUBO() {
 	MVP ubo{};
-	ubo.model = glm::mat4(1.0f);
-	ubo.view = glm::lookAt(glm::vec3(20.f),
-						   glm::vec3(0.0f,.0f, 0.0f),
-						   glm::vec3(0.0f, 1.0f, 0.f));
+    ubo.model = glm::mat4(1.0f);
+    ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	float aspectRatio = static_cast<float>(m_SwapChainFactory->Extent.width) / m_SwapChainFactory->Extent.height;
-	ubo.proj = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+    ubo.proj = m_Camera->GetProjectionMatrix(aspectRatio);
 
-	ubo.proj[1][1] *= -1;
-
-	Buffer::UploadData(m_UniformBufferInfo,&ubo,sizeof(ubo));
+    Buffer::UploadData(m_UniformBufferInfo, &ubo, sizeof(ubo));
 
 }
 
@@ -97,6 +104,80 @@ void VulkanWindow::CreateSurface() {
 	VkSurfaceKHR m_TempSurface;
 	glfwCreateWindowSurface(**m_Instance, m_Window, nullptr,&m_TempSurface);
 	m_Surface = m_TempSurface;
+}
+
+void VulkanWindow::SetupMouseCallback(GLFWwindow* window) {
+	glfwSetWindowUserPointer(window, this);
+
+	glfwSetCursorPosCallback(window, [](GLFWwindow* w, double xpos, double ypos) {
+		VulkanWindow* self = static_cast<VulkanWindow*>(glfwGetWindowUserPointer(w));
+		if (self) {
+			self->mouse_callback(xpos, ypos);
+		}
+	});
+}
+
+void VulkanWindow::mouse_callback(double xpos, double ypos) {
+	if (firstMouse) {
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos;  // reversed y
+
+	lastX = xpos;
+	lastY = ypos;
+
+	float sensitivity = 0.1f;
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.0f) pitch = 89.0f;
+	if (pitch < -89.0f) pitch = -89.0f;
+
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front.y = sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	cameraFront = glm::normalize(front);
+}
+
+
+void VulkanWindow::ProcessInput(GLFWwindow* window, float deltaTime) {
+	float velocity = cameraSpeed * deltaTime;
+
+
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	}
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+		cameraPos += cameraFront * velocity;
+	}
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+		cameraPos -= cameraFront * velocity;
+	}
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+		glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
+		cameraPos -= right * velocity;
+	}
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+		glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
+		cameraPos += right * velocity;
+	}
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+		glm::vec3 Up = glm::normalize(glm::cross(cameraFront, cameraRight));
+		cameraPos += Up * velocity;
+	}
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+		glm::vec3 Down = -glm::normalize(glm::cross(cameraFront, cameraRight));
+		cameraPos += Down * velocity;
+	}
+
 }
 
 void VulkanWindow::Run()
@@ -132,6 +213,8 @@ void VulkanWindow::CreateVmaAllocator() {
 void VulkanWindow::InitVulkan() {
 
 	m_Buffer = std::make_unique<Buffer>();
+	m_Camera = std::make_unique<Camera>();
+
 	m_AllocationTracker = std::make_unique<ResourceTracker>();
 
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
