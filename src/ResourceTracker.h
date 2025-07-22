@@ -11,7 +11,7 @@
 #include "vma/vk_mem_alloc.h"
 
 
-class AllocationTracker {
+class ResourceTracker {
 
 public:
 
@@ -35,8 +35,25 @@ public:
         }
     }
 
+    void TrackImageView(VkImageView view, const std::string& name) {
+        g_ImageViewTracker[view] = name;
+    }
+
+    void UntrackImageView(VkImageView view) {
+        g_ImageViewTracker.erase(view);
+    }
+
+    void PrintImageViews() {
+        std::cout << "Current ImageViews: " <<  g_ImageViewTracker.size() << std::endl;
+        for (auto& [alloc,name] : g_ImageViewTracker) {
+            std::cout << name.c_str() << std::endl;
+        }
+    }
+
 private:
     std::unordered_map<void*, std::string> g_TrackedAllocs;
+    std::unordered_map<VkImageView, std::string> g_ImageViewTracker;
+
 
 
 

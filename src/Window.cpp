@@ -7,6 +7,7 @@
 #include "Factories/ShaderFactory.h"
 #define GLM_ENABLE_EXPERIMENTAL
 #include "Buffer.h"
+#include "PhysicalDevicePicker.h"
 #include "glm/gtx/transform.hpp"
 
 
@@ -57,11 +58,11 @@ void VulkanWindow::Cleanup() {
 		m_VmaAllocatorsDeletionQueue.pop_back();
 	}
 
-	m_AllocationTracker->PrintAllocations();
 
 	m_ImageResource.clear();
 
-	vkDestroyImageView(**m_Device,m_DepthImage.imageView,nullptr);
+	m_AllocationTracker->PrintAllocations();
+	m_AllocationTracker->PrintImageViews();
 
 
 	vmaDestroyAllocator(m_VmaAllocator);
@@ -128,7 +129,7 @@ void VulkanWindow::CreateVmaAllocator() {
 
 void VulkanWindow::InitVulkan() {
 
-	m_AllocationTracker = std::make_unique<AllocationTracker>();
+	m_AllocationTracker = std::make_unique<ResourceTracker>();
 
 	m_Instance = std::make_unique<vk::raii::Instance>(m_InstanceFactory->Build_Instance(m_Context, instanceExtensions, validationLayers));
 	m_DebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(m_DebugMessengerFactory->Build_DebugMessenger(*m_Instance));
@@ -158,6 +159,7 @@ void VulkanWindow::InitVulkan() {
 				 m_UniformAllocation,
 				 m_UniformAllocInfo,
 				 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
+
 
 
 
@@ -222,12 +224,11 @@ void VulkanWindow::InitVulkan() {
 	std::move(
 		m_DescriptorSetFactory
 			->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
-			.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_ImageResource.size())
+			.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, static_cast<uint32_t>(m_ImageResource.size()))
 			.Build()
 		)
 	);
 
-	vk::Format colorFormat = m_SwapChainFactory->Format.format;
 	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
 
 	vk::ImageCreateInfo imageInfo{};
@@ -247,14 +248,16 @@ void VulkanWindow::InitVulkan() {
 	VmaAllocationCreateInfo vmaAllocationCreateInfo{};
 
 	vmaCreateImage(m_VmaAllocator, &imgInfo, &vmaAllocationCreateInfo, &img, &m_DepthImage.allocation, nullptr);
-	m_DepthImage.image = std::move(img);
-	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth);
+	m_DepthImage.image = img;
+	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth, m_AllocationTracker.get(), "DepthImageView");
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 	m_AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
-	m_VmaAllocatorsDeletionQueue.push_back([&](VmaAllocator) {
-		m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
+	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
+		m_AllocationTracker->UntrackImageView(m_DepthImage.imageView);
+		vkDestroyImageView(**m_Device,m_DepthImage.imageView,nullptr);
 
+		m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
 		vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
 
 	});
@@ -274,8 +277,8 @@ void VulkanWindow::InitVulkan() {
 	});
 	}*/
 
-	m_VmaAllocatorsDeletionQueue.push_back([&](VmaAllocator) {
-		vmaFreeMemory(m_VmaAllocator, m_UniformAllocation);
+	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
+		Buffer::Destroy(m_VmaAllocator,m_UniformBuffer,m_UniformAllocation,m_AllocationTracker.get());
 	});
 
 	m_AllocationTracker->PrintAllocations();
@@ -320,6 +323,10 @@ void VulkanWindow::DrawFrame() {
 
 
 	vk::Result waitResult = m_Device->waitForFences({*m_RenderFinishedFence}, false, UINT64_MAX);
+	if (waitResult != vk::Result::eSuccess) {
+		std::cout << "Waiting for render not succeded" << std::endl;
+	}
+
 	m_Device->resetFences({*m_RenderFinishedFence});
 
 	vk::AcquireNextImageInfoKHR acquireInfo{};
@@ -466,6 +473,9 @@ void VulkanWindow::DrawFrame() {
 
 	auto result = m_GraphicsQueue->presentKHR(presentInfo);
 
+	if (result != vk::Result::eSuccess) {
+		std::cout << "Failed to present" << std::endl;
+	}
 
 }
 
@@ -528,7 +538,7 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(MVP);
 
-	for (auto& ds : *m_FrameDescriptorSets.get()) {
+	for (auto& ds : *m_FrameDescriptorSets) {
 		vk::WriteDescriptorSet writeInfo{};
 
 		writeInfo.dstSet          = ds;
@@ -568,9 +578,9 @@ void VulkanWindow::CreateDescriptorSets() {
 	SamplerInfo.imageView = VK_NULL_HANDLE;
 	SamplerInfo.sampler = *m_Sampler;
 
-	for (auto& ds: *m_GlobalDescriptorSets.get()) {
+	for (auto& ds: *m_GlobalDescriptorSets) {
 		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
-		descriptorWrites.push_back(vk::WriteDescriptorSet());
+		descriptorWrites.emplace_back();
 
 		descriptorWrites[0].dstSet = ds;
 		descriptorWrites[0].dstBinding = 0;
@@ -588,12 +598,12 @@ void VulkanWindow::CreateDescriptorSets() {
 			DescriptorImgInfos.emplace_back(descriptorImageInfo);
 		}
 
-		descriptorWrites.push_back(vk::WriteDescriptorSet());
+		descriptorWrites.emplace_back();
 		descriptorWrites[1].dstSet = ds;
 		descriptorWrites[1].dstBinding = 1;
 		descriptorWrites[1].dstArrayElement = 0;
 		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
-		descriptorWrites[1].descriptorCount = DescriptorImgInfos.size();
+		descriptorWrites[1].descriptorCount = static_cast<uint32_t>(DescriptorImgInfos.size());
 		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
 
 		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
@@ -609,7 +619,7 @@ void VulkanWindow::CreatePipelineLayout() {
 	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
 	vk::PipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.setLayoutCount = DescriptorSetLayouts.size();
+	layoutInfo.setLayoutCount = static_cast<uint32_t>(DescriptorSetLayouts.size());
 	layoutInfo.pSetLayouts = DescriptorSetLayouts.data();
 	layoutInfo.pushConstantRangeCount = 1;
 	layoutInfo.pPushConstantRanges = &pushConstantRange;

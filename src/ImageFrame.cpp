@@ -77,19 +77,6 @@ ImageFrameCommandFactory& ImageFrameCommandFactory::End(ImageResource& image) {
     return *this;
 }
 
-void ImageFrame::RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders) {
-    //Build_ColorAttachment(imageIndex);
-    //Build_RenderingInfo(screenSize);
-    //
-    //ImageFrameCommandFactory builder(m_CommandBuffer);
-    //builder.Begin(m_RenderingInfo, m_Images[imageIndex])
-    //       .SetViewport(screenSize)
-    //       .SetShaders(shaders)
-    //       .BindPipeline(m_Pipeline, m_PipelineLayout)
-    //       .DrawMesh(*m_Mesh, TODO)
-    //       .End(m_Images[imageIndex]);
-}
-
 void ImageFrame::SetDepthImage(vk::ImageView depthView, vk::Format format) {
     m_DepthImageView = depthView;
     m_DepthFormat = format;

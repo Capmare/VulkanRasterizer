@@ -75,12 +75,12 @@ public:
                                         const vk::CommandBuffer &CommandBuffer, const vk::raii::Queue &GraphicsQueue,
                                         vk::raii::Device &device, vk::DescriptorPool descriptorPool,
                                         vk::DescriptorSetLayout descriptorSetLayout, vk::Sampler sampler, const vk::raii::CommandPool &CmdPool, std::vector<
-                                            ImageResource> &textures, class AllocationTracker* AllocTracker);
+                                            ImageResource> &textures, class ResourceTracker* AllocTracker);
 
     Mesh Build_Mesh(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                     const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue, vk::raii::Device &device,
                     vk::DescriptorPool descriptorPool, vk::DescriptorSetLayout descriptorSetLayout, uint32_t ImageIdx, vk::Sampler sampler, const
-                    std::vector<Vertex> &vertices, std::vector<uint32_t> indices, AllocationTracker *AllocationTracker, const std::string &
+                    std::vector<Vertex> &vertices, std::vector<uint32_t> indices, ResourceTracker *AllocationTracker, const std::string &
                     AllocName);
 
 

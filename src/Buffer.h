@@ -20,7 +20,7 @@ public:
                        VmaAllocation &allocation,
                        VmaAllocationInfo &allocInfo,
                        VmaAllocationCreateFlags flags = 0,
-                       class AllocationTracker* AllocationTracker = nullptr,
+                       class ResourceTracker* AllocationTracker = nullptr,
                        const std::string& AllocName = "Buffer");
 
     static void UploadData(VmaAllocator allocator,
@@ -30,7 +30,7 @@ public:
 
 
 
-    static void Destroy(VmaAllocator allocator, VkBuffer buffer, VmaAllocation allocation, AllocationTracker *AllocationTracker);
+    static void Destroy(VmaAllocator allocator, VkBuffer buffer, VmaAllocation allocation, ResourceTracker *AllocationTracker);
 };
 
 #endif //BUFFER_H

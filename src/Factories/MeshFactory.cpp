@@ -10,7 +10,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
-#include "AllocationTracker.h"
+#include "ResourceTracker.h"
 #include "ImageFactory.h"
 
 
@@ -25,7 +25,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     vk::DescriptorSetLayout descriptorSetLayout,
     vk::Sampler sampler,
     const vk::raii::CommandPool& CmdPool,
-    std::vector<ImageResource>& textures, AllocationTracker* AllocTracker
+    std::vector<ImageResource>& textures, ResourceTracker* AllocTracker
 )
 {
     Assimp::Importer importer;
@@ -85,12 +85,15 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     } else {
                         textures.emplace_back(ImageFactory::LoadTexture(fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker));
 
-                        textureCache[fullPath] = textures.size() - 1;
+                        textureCache[fullPath] = static_cast<uint32_t>(textures.size() - 1);
 
                         // Schedule deletion of allocation
                         VmaAllocation allocation = textures.back().allocation;
-                        DeletionQueue.push_back([Allocator, allocation,AllocTracker](VmaAllocator alloc) {
-		                    AllocTracker->UntrackAllocation(allocation);
+                        DeletionQueue.emplace_back([Allocator, allocation,AllocTracker,textures,&device](VmaAllocator alloc) {
+                            AllocTracker->UntrackImageView(textures.back().imageView);
+                            vkDestroyImageView(*device,textures.back().imageView,nullptr);
+
+                            AllocTracker->UntrackAllocation(allocation);
                             vmaFreeMemory(alloc, allocation);
                         });
                     }
@@ -103,7 +106,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                 textureIdx, sampler, vertices, indices, AllocTracker, "Mesh"
             );
 
-            meshes.push_back(std::move(meshObj));
+            meshes.push_back(meshObj);
         }
 
         for (unsigned int i = 0; i < node->mNumChildren; ++i)
@@ -130,7 +133,7 @@ Mesh MeshFactory::Build_Mesh(
     vk::Sampler sampler,
     const std::vector<Vertex>& vertices,
     const std::vector<uint32_t> indices,
-    AllocationTracker* AllocationTracker,
+    ResourceTracker* AllocationTracker,
     const std::string& AllocName
 ) {
     Mesh mesh;

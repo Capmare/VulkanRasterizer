@@ -6,7 +6,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
 #include <deque>
 #include <functional>
 
@@ -16,9 +15,8 @@
 
 #include <memory>
 
-#include "AllocationTracker.h"
+#include "ResourceTracker.h"
 #include "ImageFrame.h"
-#include "PhysicalDevicePicker.h"
 #include "Renderer.h"
 #include "Factories/DebugMessengerFactory.h"
 #include "Factories/DepthImageFactory.h"
@@ -101,65 +99,65 @@ private:
 	std::unique_ptr<Renderer> m_Renderer{};
 	std::unique_ptr<GraphicsPipelineFactory> m_GraphicsPipelineFactory{};
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
-	std::unique_ptr<DepthImageFactory> m_DepthImageFactory;
+	std::unique_ptr<DepthImageFactory> m_DepthImageFactory{};
 
 	std::unique_ptr<vk::raii::Instance> m_Instance{};
-	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger;
-	std::unique_ptr<vk::raii::PhysicalDevice> m_PhysicalDevice;
-	std::unique_ptr<vk::raii::Device> m_Device;
-	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain;
-	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue;
-	std::unique_ptr<vk::raii::Pipeline> m_Pipeline;
+	std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> m_DebugMessenger{};
+	std::unique_ptr<vk::raii::PhysicalDevice> m_PhysicalDevice{};
+	std::unique_ptr<vk::raii::Device> m_Device{};
+	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
+	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
+	std::unique_ptr<vk::raii::Pipeline> m_Pipeline{};
 
-	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore;
-	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore;
-	std::unique_ptr<vk::raii::Fence> m_RenderFinishedFence;
+	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore{};
+	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore{};
+	std::unique_ptr<vk::raii::Fence> m_RenderFinishedFence{};
 
-	vk::SurfaceKHR m_Surface;
-	std::vector<ImageResource> m_SwapChainImages;
-	ImageResource m_DepthImage;
+	vk::SurfaceKHR m_Surface{};
+	std::vector<ImageResource> m_SwapChainImages{};
+	ImageResource m_DepthImage{};
 
-	vk::raii::Context m_Context;
+	vk::raii::Context m_Context{};
 	bool m_bFrameBufferResized{ false };
 
 
-	std::vector<vk::ShaderEXT> rawShaders;
-	std::vector<vk::raii::ShaderModule> m_ShaderModules;
-	std::unique_ptr<vk::raii::Sampler> m_Sampler;
+	std::vector<vk::ShaderEXT> rawShaders{};
+	std::vector<vk::raii::ShaderModule> m_ShaderModules{};
+	std::unique_ptr<vk::raii::Sampler> m_Sampler{};
 
-	std::unique_ptr<vk::raii::CommandPool> m_CmdPool;
-	std::unique_ptr<vk::raii::CommandBuffer> m_MeshCmdBuffer;
+	std::unique_ptr<vk::raii::CommandPool> m_CmdPool{};
+	std::unique_ptr<vk::raii::CommandBuffer> m_MeshCmdBuffer{};
 
-	std::unique_ptr<vk::raii::DescriptorSetLayout> m_FrameDescriptorSetLayout;
-	std::unique_ptr<vk::raii::DescriptorSetLayout> m_GlobalDescriptorSetLayout;
+	std::unique_ptr<vk::raii::DescriptorSetLayout> m_FrameDescriptorSetLayout{};
+	std::unique_ptr<vk::raii::DescriptorSetLayout> m_GlobalDescriptorSetLayout{};
 
-	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool;
-	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout;
+	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool{};
+	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout{};
 
-	std::vector<ImageFrame> m_ImageFrames;
+	std::vector<ImageFrame> m_ImageFrames{};
 
-	std::vector<vk::raii::ShaderModule> m_ShaderModule;
+	std::vector<vk::raii::ShaderModule> m_ShaderModule{};
 
-	std::deque<std::function<void(VmaAllocator)>> m_VmaAllocatorsDeletionQueue;
+	std::deque<std::function<void(VmaAllocator)>> m_VmaAllocatorsDeletionQueue{};
 
 	VmaAllocator m_VmaAllocator{};
 
-	std::unique_ptr<MeshFactory> m_MeshFactory;
-	std::vector<ImageResource> m_ImageResource;
+	std::unique_ptr<MeshFactory> m_MeshFactory{};
+	std::vector<ImageResource> m_ImageResource{};
 
 
-	VkBuffer m_UniformBuffer;
-	VmaAllocation m_UniformAllocation;
-	VmaAllocationInfo m_UniformAllocInfo;
+	VkBuffer m_UniformBuffer{};
+	VmaAllocation m_UniformAllocation{};
+	VmaAllocationInfo m_UniformAllocInfo{};
 
-	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers;
+	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
-	std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets;
-    std::unique_ptr<vk::raii::DescriptorSets> m_GlobalDescriptorSets;
+	std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets{};
+    std::unique_ptr<vk::raii::DescriptorSets> m_GlobalDescriptorSets{};
 
-	std::vector<Mesh> m_Meshes;
+	std::vector<Mesh> m_Meshes{};
 
-	std::unique_ptr<AllocationTracker> m_AllocationTracker{};
+	std::unique_ptr<ResourceTracker> m_AllocationTracker{};
 
 
 };

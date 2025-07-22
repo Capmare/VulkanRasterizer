@@ -16,7 +16,7 @@ ImageResource ImageFactory::LoadTexture(
     const vk::raii::Device &device,
     VmaAllocator allocator,
     const vk::raii::CommandPool &commandPool,
-    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, AllocationTracker* AllocationTracker)
+    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, ResourceTracker* AllocationTracker)
 {
 
     ImageResource imgResource{};
@@ -139,17 +139,17 @@ ImageResource ImageFactory::LoadTexture(
     Buffer::Destroy(allocator, stagingBuffer, stagingAlloc, AllocationTracker);
 
     // === Create image view ===
-    vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect);
+    vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect, AllocationTracker, "textureImageView" + filename);
 
     imgResource.image = std::move(textureImage);
     imgResource.allocation = textureAlloc;
-    imgResource.imageView = std::move(imageView);
+    imgResource.imageView = imageView;
 
     return imgResource;
 }
 
 
-VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect) {
+VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker* ResourceTracker, const std::string& Name) {
 
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -174,6 +174,8 @@ VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Im
         fprintf(stderr, "Failed to create VkImageView (error %d)\n", result);
         imageView = VK_NULL_HANDLE;
     }
+
+    ResourceTracker->TrackImageView(imageView,Name);
 
     return imageView;
 }

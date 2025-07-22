@@ -21,7 +21,6 @@ public:
         , m_CommandBuffer(std::move(commandBuffer))
         , m_Mesh(triangleMesh) {}
 
-    void RecordCmdBuffer(uint32_t imageIndex, const vk::Extent2D& screenSize, const std::vector<vk::ShaderEXT>& shaders);
 
     void SetPipeline(vk::Pipeline pipeline) { m_Pipeline = pipeline; }
     void SetPipelineLayout(vk::PipelineLayout layout) { m_PipelineLayout = layout; }
