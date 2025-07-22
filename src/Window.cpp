@@ -84,10 +84,9 @@ void VulkanWindow::UpdateUBO() {
 	ubo.view = glm::lookAt(glm::vec3(20.f),
 						   glm::vec3(0.0f,.0f, 0.0f),
 						   glm::vec3(0.0f, 1.0f, 0.f));
-	ubo.proj = glm::perspective(glm::radians(45.0f),
-								1.0f,
-								0.1f,
-								1000.0f);
+	float aspectRatio = static_cast<float>(m_SwapChainFactory->Extent.width) / m_SwapChainFactory->Extent.height;
+	ubo.proj = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 1000.0f);
+
 	ubo.proj[1][1] *= -1;
 
 	Buffer::UploadData(m_UniformBufferInfo,&ubo,sizeof(ubo));
