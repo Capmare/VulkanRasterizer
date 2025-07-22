@@ -6,6 +6,8 @@
 
 #include "Factories/ShaderFactory.h"
 #define GLM_ENABLE_EXPERIMENTAL
+#include <ranges>
+
 #include "Buffer.h"
 #include "PhysicalDevicePicker.h"
 #include "glm/gtx/transform.hpp"
@@ -60,6 +62,7 @@ void VulkanWindow::Cleanup() {
 
 
 	m_ImageResource.clear();
+	m_SwapChainImageViews.clear();
 
 	m_AllocationTracker->PrintAllocations();
 	m_AllocationTracker->PrintImageViews();
@@ -242,13 +245,19 @@ void VulkanWindow::InitVulkan() {
 
 	vmaCreateImage(m_VmaAllocator, &imgInfo, &vmaAllocationCreateInfo, &img, &m_DepthImage.allocation, nullptr);
 	m_DepthImage.image = img;
-	m_DepthImage.imageView = ImageFactory::CreateImageView(*m_Device,m_DepthImage.image,depthFormat,vk::ImageAspectFlagBits::eDepth, m_AllocationTracker.get(), "DepthImageView");
+
+	m_DepthImageView = ImageFactory::CreateImageView(
+			*m_Device,m_DepthImage.image,
+			depthFormat,vk::ImageAspectFlagBits::eDepth,
+			m_AllocationTracker.get(), "DepthImageView"
+			);
+
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 	m_AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
-		m_AllocationTracker->UntrackImageView(m_DepthImage.imageView);
-		vkDestroyImageView(**m_Device,m_DepthImage.imageView,nullptr);
+		m_AllocationTracker->UntrackImageView(m_DepthImageView);
+		vkDestroyImageView(**m_Device,m_DepthImageView,nullptr);
 
 		m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
 		vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
@@ -281,8 +290,6 @@ void VulkanWindow::DrawFrame() {
 
 	UpdateUBO();
 
-
-
 	int width, height;
 	glfwGetFramebufferSize(m_Window, &width, &height);
 
@@ -293,11 +300,7 @@ void VulkanWindow::DrawFrame() {
 		m_SwapChainFactory->m_ImageViews.clear();
 
 		m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
-			m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, width, height));
-
-		for (auto& frame : m_ImageFrames) {
-			frame.SetSwapChainFactory(m_SwapChainFactory.get());
-		}
+		m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, width, height));
 
 		m_SwapChainImages.clear();
 
@@ -486,7 +489,7 @@ void VulkanWindow::LoadMesh() {
 	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
 	                                            **m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
 	                                            *m_CmdPool,m_ImageResource,
-	                                            m_AllocationTracker.get());
+	                                            m_SwapChainImageViews, m_AllocationTracker.get());
 }
 
 void VulkanWindow::CreateDescriptorPools() {
@@ -583,10 +586,10 @@ void VulkanWindow::CreateDescriptorSets() {
 		descriptorWrites[0].pImageInfo = &SamplerInfo;
 
 		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
-		for (auto& img : m_ImageResource) {
+		for (auto [i, img] : m_ImageResource | std::ranges::views::enumerate) {
 			vk::DescriptorImageInfo descriptorImageInfo{};
 			descriptorImageInfo.imageLayout = img.imageLayout;
-			descriptorImageInfo.imageView = img.imageView;
+			descriptorImageInfo.imageView = m_SwapChainImageViews[i];
 
 			DescriptorImgInfos.emplace_back(descriptorImageInfo);
 		}

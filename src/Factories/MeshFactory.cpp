@@ -22,7 +22,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     const vk::raii::Queue& GraphicsQueue,
     vk::raii::Device &device,
     const vk::raii::CommandPool& CmdPool,
-    std::vector<ImageResource>& textures, ResourceTracker* AllocTracker
+    std::vector<ImageResource>& textures, std::vector<vk::ImageView>& TextureImageViews, ResourceTracker* AllocTracker
 )
 {
     Assimp::Importer importer;
@@ -80,15 +80,30 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     if (textureCache.contains(fullPath)) {
                         textureIdx = textureCache[fullPath];
                     } else {
-                        textures.emplace_back(ImageFactory::LoadTexture(m_MeshBuffer.get(), fullPath, device, Allocator, CmdPool, GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker));
+                        auto texture = ImageFactory::LoadTexture(
+                                m_MeshBuffer.get(), fullPath, device, Allocator, CmdPool,
+                                GraphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, AllocTracker
+                                );
+
+                        textures.emplace_back(texture);
+
+                        auto ImageView = ImageFactory::CreateImageView(
+                            device, texture.image, vk::Format::eR8G8B8A8Srgb,
+                            vk::ImageAspectFlagBits::eColor, AllocTracker,
+                            "textureImageView: " + fullPath
+                            );
+
+                        TextureImageViews.emplace_back(ImageView);
+
 
                         textureCache[fullPath] = static_cast<uint32_t>(textures.size() - 1);
 
                         // Schedule deletion of allocation
                         VmaAllocation allocation = textures.back().allocation;
-                        DeletionQueue.emplace_back([Allocator, allocation,AllocTracker,textures,&device](VmaAllocator alloc) {
-                            AllocTracker->UntrackImageView(textures.back().imageView);
-                            vkDestroyImageView(*device,textures.back().imageView,nullptr);
+                        DeletionQueue.emplace_back([Allocator, allocation,AllocTracker,textures,&device, TextureImageViews](VmaAllocator alloc) {
+                            AllocTracker->UntrackImageView(TextureImageViews.back());
+                            vkDestroyImageView(*device,TextureImageViews.back(),nullptr);
+                            vkDestroyImage(*device,textures.back().image,nullptr);
 
                             AllocTracker->UntrackAllocation(allocation);
                             vmaFreeMemory(alloc, allocation);

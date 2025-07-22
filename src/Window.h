@@ -17,7 +17,6 @@
 
 #include "Buffer.h"
 #include "ResourceTracker.h"
-#include "ImageFrame.h"
 #include "Renderer.h"
 #include "Factories/DebugMessengerFactory.h"
 #include "Factories/DepthImageFactory.h"
@@ -25,6 +24,7 @@
 #include "Factories/ImageFactory.h"
 #include "Factories/InstanceFactory.h"
 #include "Factories/LogicalDeviceFactory.h"
+#include "Factories/MeshFactory.h"
 #include "Factories/PipelineFactory.h"
 #include "Factories/SwapChainFactory.h"
 
@@ -135,7 +135,6 @@ private:
 	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool{};
 	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout{};
 
-	std::vector<ImageFrame> m_ImageFrames{};
 
 	std::vector<vk::raii::ShaderModule> m_ShaderModule{};
 
@@ -160,5 +159,9 @@ private:
 	std::unique_ptr<ResourceTracker> m_AllocationTracker{};
 
 	std::unique_ptr<Buffer> m_Buffer{};
+
+
+	vk::ImageView m_DepthImageView{};
+	std::vector<vk::ImageView> m_SwapChainImageViews{};
 
 };

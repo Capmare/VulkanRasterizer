@@ -12,10 +12,11 @@
 
 struct ImageResource {
     vk::Image image{};
-    VmaAllocation allocation{};
-    vk::ImageView imageView{};
-    vk::ImageLayout imageLayout{};
+    vk::Extent2D extent{};
+    vk::Format format{};
     vk::ImageAspectFlags imageAspectFlags{};
+    vk::ImageLayout imageLayout{};
+    VmaAllocation allocation{};
 
 };
 

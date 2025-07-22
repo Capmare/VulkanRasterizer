@@ -7,7 +7,6 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include "ImageFrame.h"
 #include "vulkan/vulkan_raii.hpp"
 
 class Renderer {
@@ -25,7 +24,6 @@ public:
 
 
 private:
-	std::vector<ImageFrame> m_ImageFrames;
 
 
 };

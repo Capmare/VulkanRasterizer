@@ -16,11 +16,14 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
     const vk::raii::Device &device,
     VmaAllocator allocator,
     const vk::raii::CommandPool &commandPool,
-    const vk::raii::Queue &graphicsQueue,vk::Format ColorFormat, vk::ImageAspectFlagBits aspect, ResourceTracker* AllocationTracker)
+    const vk::raii::Queue &graphicsQueue,
+    vk::Format ColorFormat,
+    vk::ImageAspectFlagBits aspect,
+    ResourceTracker* AllocationTracker)
 {
-
     ImageResource imgResource{};
     imgResource.imageAspectFlags = aspect;
+    imgResource.format = ColorFormat;
 
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -30,21 +33,31 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
         throw std::runtime_error("Failed to load texture image: " + absPath.string());
     }
 
-    if (!pixels || texWidth == 0 || texHeight == 0) {
-        std::cout << "Loaded texture: " << texWidth << "x" << texHeight << " from " << filename << "\n";
-        throw std::runtime_error("Failed to load texture or texture has zero size: " + absPath.string());
+    if (texWidth == 0 || texHeight == 0) {
+        stbi_image_free(pixels);
+        throw std::runtime_error("Loaded texture has zero size: " + absPath.string());
     }
+
+    imgResource.extent = vk::Extent2D(texWidth, texHeight);
 
     vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
+    // Create a staging buffer, mapped to CPU memory, for uploading texture data
+    BufferInfo StagingBuffer = buff->CreateMapped(
+        allocator,
+        imageSize,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        VMA_MEMORY_USAGE_CPU_ONLY,
+        0,
+        AllocationTracker,
+        filename + "StagingBuffer"
+    );
 
-    BufferInfo StagingBuffer = buff->CreateMapped(allocator,imageSize,vk::BufferUsageFlagBits::eTransferSrc,VMA_MEMORY_USAGE_CPU_ONLY,0,AllocationTracker,filename + "StagingBuffer");
-
-
+    // Upload pixel data into staging buffer
     Buffer::UploadData(StagingBuffer, pixels, static_cast<size_t>(imageSize));
     stbi_image_free(pixels);
 
-    // === Create vk::raii::Image ===
+    // === Create VkImage via VMA ===
     vk::ImageCreateInfo imageInfo{};
     imageInfo.imageType = vk::ImageType::e2D;
     imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
@@ -57,28 +70,32 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    vk::raii::Image textureImage(*device.createImage(imageInfo));
+    VkImageCreateInfo imgInfo = static_cast<VkImageCreateInfo>(imageInfo);
 
-    imgResource.image = textureImage;
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
-    // === Allocate memory via VMA and bind ===
-    VmaAllocation textureAlloc;
-    VmaAllocationInfo textureAllocInfo{};
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkImage rawImage = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocationInfo{};
 
-    if (vmaAllocateMemoryForImage(
-            allocator,
-            static_cast<VkImage>(*textureImage),
-            &allocInfo,
-            &textureAlloc,
-            &textureAllocInfo) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate memory for image!");
+    VkResult result = vmaCreateImage(
+        allocator,
+        &imgInfo,
+        &allocCreateInfo,
+        &rawImage,
+        &allocation,
+        &allocationInfo
+    );
+
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create image with VMA.");
     }
 
-    vmaBindImageMemory(allocator, textureAlloc, static_cast<VkImage>(*textureImage));
+    imgResource.image = rawImage;
+    imgResource.allocation = allocation;
 
-    // === Transition layout and copy ===
+    // === Transition image layout and copy from staging buffer ===
     vk::raii::CommandBuffer commandBuffer = std::move(device.allocateCommandBuffers(
         vk::CommandBufferAllocateInfo{
             *commandPool,
@@ -90,10 +107,18 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
 
     ShiftImageLayout(
         *commandBuffer, imgResource,
-        vk::ImageLayout::eTransferDstOptimal,
-        vk::AccessFlagBits::eNone,
+        vk::ImageLayout::eUndefined,
+        vk::AccessFlags(),
         vk::AccessFlagBits::eTransferWrite,
         vk::PipelineStageFlagBits::eTopOfPipe,
+        vk::PipelineStageFlagBits::eTransfer);
+
+    ShiftImageLayout(
+        *commandBuffer, imgResource,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::AccessFlags(),
+        vk::AccessFlagBits::eTransferWrite,
+        vk::PipelineStageFlagBits::eTransfer,
         vk::PipelineStageFlagBits::eTransfer);
 
     vk::BufferImageCopy copyRegion{};
@@ -101,13 +126,14 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
     copyRegion.imageSubresource.mipLevel = 0;
     copyRegion.imageSubresource.baseArrayLayer = 0;
     copyRegion.imageSubresource.layerCount = 1;
-    imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
-    copyRegion.imageExtent = imageInfo.extent;
-
+    copyRegion.imageExtent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
+    copyRegion.bufferOffset = 0;
+    copyRegion.bufferRowLength = 0;
+    copyRegion.bufferImageHeight = 0;
 
     commandBuffer.copyBufferToImage(
         StagingBuffer.m_Buffer,
-        *textureImage,
+        imgResource.image,
         vk::ImageLayout::eTransferDstOptimal,
         copyRegion);
 
@@ -129,12 +155,7 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
 
     Buffer::Destroy(allocator, StagingBuffer.m_Buffer, StagingBuffer.m_Allocation, AllocationTracker);
 
-    // === Create image view ===
-    vk::ImageView imageView = CreateImageView(device, *textureImage, ColorFormat, aspect, AllocationTracker, "textureImageView" + filename);
-
-    imgResource.image = std::move(textureImage);
-    imgResource.allocation = textureAlloc;
-    imgResource.imageView = imageView;
+    imgResource.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
     return imgResource;
 }

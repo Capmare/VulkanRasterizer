@@ -4,8 +4,7 @@
 
 #include "Renderer.h"
 
-#include <iostream>
-#include <ostream>
+
 
 
 

@@ -71,7 +71,8 @@ public:
                                         std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                                         const vk::CommandBuffer &CommandBuffer, const vk::raii::Queue &GraphicsQueue,
                                         vk::raii::Device &device,
-                                        const vk::raii::CommandPool &CmdPool, std::vector<ImageResource> &textures, class ResourceTracker *AllocTracker);
+                                        const vk::raii::CommandPool &CmdPool, std::vector<ImageResource> &textures, std::vector<vk::ImageView> &
+                                        TextureImageViews, class ResourceTracker *AllocTracker);
 
     Mesh Build_Mesh(VmaAllocator &Allocator, std::deque<std::function<void(VmaAllocator)>> &DeletionQueue,
                     const vk::CommandBuffer &CommandBuffer, vk::Queue GraphicsQueue,
