@@ -180,7 +180,7 @@ private:
 	glm::vec3 cameraRight = glm::vec3(0.f, 0.f, 1.f);
 
 	float cameraSpeed = 10.0f;
-	float lastFrameTime = 0.f;
+	double lastFrameTime = 0.f;
 
 
 	double lastX = 400, lastY = 300;

@@ -7,7 +7,7 @@ layout(location = 1) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 1, binding = 0) uniform sampler texSampler;
-layout(constant_id = 0) const uint TEXTURE_COUNT = 3;
+layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
 
 layout (push_constant) uniform constants
 {

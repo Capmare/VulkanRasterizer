@@ -50,11 +50,11 @@ void VulkanWindow::MainLoop()
 	while (!glfwWindowShouldClose(m_Window)) {
 		glfwPollEvents();
 
-		auto currentTime = glfwGetTime();
-		float deltaTime = currentTime - lastFrameTime;
+		const auto currentTime = glfwGetTime();
+		const auto deltaTime = currentTime - lastFrameTime;
 		lastFrameTime = currentTime;
 
-		ProcessInput(m_Window, deltaTime);
+		ProcessInput(m_Window, static_cast<float>(deltaTime));
 		DrawFrame();
 
 		m_GraphicsQueue->waitIdle();
@@ -124,8 +124,8 @@ void VulkanWindow::mouse_callback(double xpos, double ypos) {
 		firstMouse = false;
 	}
 
-	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos;  // reversed y
+	float xoffset = static_cast<float>(xpos - lastX);
+	float yoffset = static_cast<float>(lastY - ypos);  // reversed y
 
 	lastX = xpos;
 	lastY = ypos;
@@ -170,12 +170,10 @@ void VulkanWindow::ProcessInput(GLFWwindow* window, float deltaTime) {
 		cameraPos += right * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-		glm::vec3 Up = glm::normalize(glm::cross(cameraFront, cameraRight));
-		cameraPos += Up * velocity;
+		cameraPos += cameraUp * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-		glm::vec3 Down = -glm::normalize(glm::cross(cameraFront, cameraRight));
-		cameraPos += Down * velocity;
+		cameraPos -= cameraUp * velocity;
 	}
 
 }
@@ -750,6 +748,18 @@ void VulkanWindow::CreateGraphicsPipeline() {
 	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
+
+	uint32_t textureCount = static_cast<uint32_t>(m_SwapChainImages.size());
+
+	vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
+
+	// Data buffer holding the value
+	vk::SpecializationInfo specializationInfo;
+	specializationInfo.mapEntryCount = 1;
+	specializationInfo.pMapEntries = &specializationEntry;
+	specializationInfo.dataSize = sizeof(textureCount);
+	specializationInfo.pData = &textureCount;
+
 	// shader stages
 	vk::PipelineShaderStageCreateInfo vertexStageInfo{};
 	vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
@@ -760,6 +770,7 @@ void VulkanWindow::CreateGraphicsPipeline() {
 	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
 	fragmentStageInfo.setModule(*m_ShaderModule[1]);
 	fragmentStageInfo.setPName("main");
+	fragmentStageInfo.pSpecializationInfo = &specializationInfo;
 
 	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
 
