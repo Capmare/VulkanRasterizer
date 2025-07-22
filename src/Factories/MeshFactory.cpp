@@ -95,7 +95,6 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
                         TextureImageViews.emplace_back(ImageView);
 
-
                         textureCache[fullPath] = static_cast<uint32_t>(textures.size() - 1);
 
                         // Schedule deletion of allocation

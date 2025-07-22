@@ -192,6 +192,18 @@ VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Im
     return imageView;
 }
 
+void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo) {
+
+
+    VkImage img = VK_NULL_HANDLE;
+    VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
+    VmaAllocationCreateInfo vmaAllocationCreateInfo{};
+
+    vmaCreateImage(Allocator, &imgInfo, &vmaAllocationCreateInfo, &img, &Image.allocation, nullptr);
+
+    Image.image = img;
+}
+
 void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, ImageResource& image,
                                     vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
                                     vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {

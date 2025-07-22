@@ -239,12 +239,8 @@ void VulkanWindow::InitVulkan() {
 	imageInfo.samples = vk::SampleCountFlagBits::e1;
 	imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-	VkImage img = VK_NULL_HANDLE;
-	VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
-	VmaAllocationCreateInfo vmaAllocationCreateInfo{};
 
-	vmaCreateImage(m_VmaAllocator, &imgInfo, &vmaAllocationCreateInfo, &img, &m_DepthImage.allocation, nullptr);
-	m_DepthImage.image = img;
+	ImageFactory::CreateImage(m_VmaAllocator,m_DepthImage,imageInfo);
 
 	m_DepthImageView = ImageFactory::CreateImageView(
 			*m_Device,m_DepthImage.image,
