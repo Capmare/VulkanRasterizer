@@ -160,6 +160,153 @@ ImageResource ImageFactory::LoadTexture(Buffer* buff,
     return imgResource;
 }
 
+ImageResource ImageFactory::LoadTextureFromMemory(
+    Buffer* buff,
+    const unsigned char* data,
+    size_t dataSize,
+    const vk::raii::Device& device,
+    VmaAllocator allocator,
+    const vk::raii::CommandPool& commandPool,
+    const vk::raii::Queue& graphicsQueue,
+    vk::Format ColorFormat,
+    vk::ImageAspectFlagBits aspect,
+    ResourceTracker* AllocationTracker)
+{
+    ImageResource imgResource{};
+    imgResource.imageAspectFlags = aspect;
+    imgResource.format = ColorFormat;
+
+    int texWidth, texHeight, texChannels;
+    stbi_uc* pixels = stbi_load_from_memory(data, static_cast<int>(dataSize), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+    if (!pixels) {
+        throw std::runtime_error("Failed to load texture from memory");
+    }
+
+    if (texWidth == 0 || texHeight == 0) {
+        stbi_image_free(pixels);
+        throw std::runtime_error("Loaded texture from memory has zero size");
+    }
+
+    imgResource.extent = vk::Extent2D(texWidth, texHeight);
+
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    // === Create staging buffer ===
+    BufferInfo StagingBuffer = buff->CreateMapped(
+        allocator,
+        imageSize,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        VMA_MEMORY_USAGE_CPU_ONLY,
+        0,
+        AllocationTracker,
+        "MemoryTextureStagingBuffer"
+    );
+
+    // Upload pixel data to staging buffer
+    Buffer::UploadData(StagingBuffer, pixels, static_cast<size_t>(imageSize));
+    stbi_image_free(pixels);
+
+    // === Create VkImage via VMA ===
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = ColorFormat;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    imageInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+    VkImageCreateInfo imgInfo = static_cast<VkImageCreateInfo>(imageInfo);
+
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkImage rawImage = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocationInfo{};
+
+    VkResult result = vmaCreateImage(
+        allocator,
+        &imgInfo,
+        &allocCreateInfo,
+        &rawImage,
+        &allocation,
+        &allocationInfo
+    );
+
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create image from memory with VMA.");
+    }
+
+    imgResource.image = rawImage;
+    imgResource.allocation = allocation;
+
+    // === Transition image layout and copy ===
+    vk::raii::CommandBuffer commandBuffer = std::move(device.allocateCommandBuffers(
+        vk::CommandBufferAllocateInfo{
+            *commandPool,
+            vk::CommandBufferLevel::ePrimary,
+            1
+        })->front());
+
+    commandBuffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+    // Transition UNDEFINED -> TRANSFER_DST
+    ShiftImageLayout(
+        *commandBuffer, imgResource,
+        vk::ImageLayout::eUndefined,
+        vk::AccessFlags(),
+        vk::AccessFlagBits::eTransferWrite,
+        vk::PipelineStageFlagBits::eTopOfPipe,
+        vk::PipelineStageFlagBits::eTransfer);
+
+    vk::BufferImageCopy copyRegion{};
+    copyRegion.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageExtent = vk::Extent3D{ static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1 };
+    copyRegion.bufferOffset = 0;
+    copyRegion.bufferRowLength = 0;
+    copyRegion.bufferImageHeight = 0;
+
+    // Copy staging buffer -> image
+    commandBuffer.copyBufferToImage(
+        StagingBuffer.m_Buffer,
+        imgResource.image,
+        vk::ImageLayout::eTransferDstOptimal,
+        copyRegion);
+
+    // Transition TRANSFER_DST -> SHADER_READ_ONLY
+    ShiftImageLayout(
+        *commandBuffer, imgResource,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::AccessFlagBits::eTransferWrite,
+        vk::AccessFlagBits::eShaderRead,
+        vk::PipelineStageFlagBits::eTransfer,
+        vk::PipelineStageFlagBits::eFragmentShader);
+
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo{};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &*commandBuffer;
+    graphicsQueue.submit(submitInfo);
+    graphicsQueue.waitIdle();
+
+    // Destroy staging buffer
+    Buffer::Destroy(allocator, StagingBuffer.m_Buffer, StagingBuffer.m_Allocation, AllocationTracker);
+
+    imgResource.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+    return imgResource;
+}
+
+
 
 VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker* ResourceTracker, const std::string& Name) {
 

@@ -38,6 +38,13 @@ public:
         const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::
         ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
 
+    ImageResource LoadTextureFromMemory(Buffer *buff, const unsigned char *data,
+                                        size_t dataSize, const vk::raii::Device &device,
+                                        VmaAllocator allocator,
+                                        const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::
+                                        ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
+
+
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker *
                                        ResourceTracker, const std::string &Name);
 

@@ -561,7 +561,7 @@ void VulkanWindow::LoadMesh() {
 	m_MeshFactory = std::make_unique<MeshFactory>();
 	m_MeshCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
 
-	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/scene.gltf",
+	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/sponza/Sponza.gltf",
 	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
 	                                            **m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
 	                                            *m_CmdPool,m_ImageResource,
