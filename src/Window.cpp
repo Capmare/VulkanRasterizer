@@ -230,7 +230,7 @@ void VulkanWindow::InitVulkan() {
 	m_FrameDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
 		std::move(
 			m_DescriptorSetFactory
-				->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex)
+				->AddBinding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
 				.Build()
 		)
 	);
