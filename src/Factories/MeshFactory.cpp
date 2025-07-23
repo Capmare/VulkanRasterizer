@@ -58,6 +58,8 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                 } else {
                     vert.texCoord = glm::vec2(0.0f);
                 }
+                vert.normal = glm::vec3(ai_mesh->mNormals->x, ai_mesh->mNormals->y, ai_mesh->mNormals->z);
+
                 vertices.push_back(vert);
             }
 
@@ -71,20 +73,20 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
             // Load material textures
             Material material{};
-            auto loadTextureIndex = [&](aiMaterial* mat, aiTextureType type) -> int {
+            auto loadTextureIndex = [&](aiMaterial* mat, aiTextureType type, vk::Format format = vk::Format::eR8G8B8A8Srgb) -> int {
                 if (mat->GetTextureCount(type) > 0) {
                     aiString texPath;
                     if (mat->GetTexture(type, 0, &texPath) == AI_SUCCESS) {
                         return LoadTextureGeneric(scene, texPath.C_Str(), baseDir, textureCache,
                                                   textures, textureImageViews,
-                                                  allocator, deletionQueue, device, cmdPool, graphicsQueue, allocTracker);
+                                                  allocator, deletionQueue, device, cmdPool, graphicsQueue, allocTracker, format);
                     }
                 }
                 return -1;
             };
 
             material.diffuseIdx   = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE);
-            material.normalIdx    = loadTextureIndex(materialPtr, aiTextureType_NORMALS);
+            material.normalIdx    = loadTextureIndex(materialPtr, aiTextureType_NORMALS, vk::Format::eR8G8B8A8Unorm);
             material.metallicIdx  = loadTextureIndex(materialPtr, aiTextureType_METALNESS);
             material.roughnessIdx = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE_ROUGHNESS);
             material.aoIdx        = loadTextureIndex(materialPtr, aiTextureType_AMBIENT_OCCLUSION);
@@ -187,7 +189,8 @@ int MeshFactory::LoadTextureGeneric(
     vk::raii::Device& device,
     const vk::raii::CommandPool& cmdPool,
     const vk::raii::Queue& graphicsQueue,
-    ResourceTracker* allocTracker
+    ResourceTracker* allocTracker,
+    vk::Format format = vk::Format::eR8G8B8A8Srgb
 ) {
     std::string fullPath = (baseDir / texPathStr).string();
 
@@ -197,12 +200,12 @@ int MeshFactory::LoadTextureGeneric(
 
     auto texture = ImageFactory::LoadTexture(
         m_MeshBuffer.get(), fullPath, device, allocator, cmdPool,
-        graphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, allocTracker);
+        graphicsQueue, format, vk::ImageAspectFlagBits::eColor, allocTracker);
 
     textures.emplace_back(texture);
 
     auto imageView = ImageFactory::CreateImageView(
-        device, texture.image, vk::Format::eR8G8B8A8Srgb,
+        device, texture.image, format,
         vk::ImageAspectFlagBits::eColor, allocTracker,
         "textureImageView: " + fullPath);
 

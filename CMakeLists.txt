@@ -14,50 +14,26 @@ if(NOT DEFINED ENV{VULKAN_SDK})
     message(FATAL_ERROR "VULKAN_SDK environment variable is not set. Please install and source the Vulkan SDK.")
 endif()
 
-set(GLSLC_EXECUTABLE "$ENV{VULKAN_SDK}/Bin/glslc.exe")
 set(SHADER_DIR "${CMAKE_SOURCE_DIR}/shaders")
 set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders")
 file(MAKE_DIRECTORY "${SHADER_OUTPUT_DIR}")
 
-# Collect sources
+# === EXECUTABLE SOURCES ===
 file(GLOB_RECURSE APP_SOURCES "src/*.cpp" "src/Factories/*.cpp")
-
-# Add executable
 add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
-# === SHADER COMPILATION ===
-function(compile_shader SHADER_FILENAME)
-    get_filename_component(SHADER_NAME ${SHADER_FILENAME} NAME)
-    set(SHADER_INPUT "${SHADER_DIR}/${SHADER_FILENAME}")
-    set(SHADER_OUTPUT "${SHADER_OUTPUT_DIR}/${SHADER_NAME}.spv")
+# === SHADER COMPILATION USING .BAT ===
+add_custom_target(compileShaders ALL
+        COMMAND ${CMAKE_COMMAND} -E echo "Cleaning old SPIR-V files..."
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${SHADER_OUTPUT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUTPUT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E echo "Running compile.bat..."
+        COMMAND ${CMAKE_COMMAND} -E chdir "${SHADER_DIR}" compile.bat
+        COMMENT "Compiling shaders via compile.bat"
+)
 
-    add_custom_command(
-            OUTPUT ${SHADER_OUTPUT}
-            COMMAND ${GLSLC_EXECUTABLE} ${SHADER_INPUT} -o ${SHADER_OUTPUT}
-            DEPENDS ${SHADER_INPUT}
-            COMMENT "Compiling ${SHADER_NAME}"
-            VERBATIM
-    )
-
-    set(COMPILED_SHADERS ${COMPILED_SHADERS} ${SHADER_OUTPUT} PARENT_SCOPE)
-endfunction()
-
-# Compile both shaders
-compile_shader("shader.vert")
-compile_shader("shader.frag")
-
-add_custom_target(compileShaders DEPENDS ${COMPILED_SHADERS})
+# Make main project depend on shader compilation
 add_dependencies(${PROJECT_NAME} compileShaders)
-
-# === COPY SHADERS AFTER BUILD ===
-foreach(SHADER_FILE ${COMPILED_SHADERS})
-    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-    add_custom_command(
-            TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${SHADER_FILE} "${SHADER_OUTPUT_DIR}/${SHADER_NAME}"
-            COMMENT "Copying ${SHADER_NAME}"
-    )
-endforeach()
 
 # === COPY TEXTURES ===
 file(GLOB TEXTURES "${CMAKE_SOURCE_DIR}/models/textures/*.*")
@@ -87,12 +63,6 @@ target_include_directories(${PROJECT_NAME}
         SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/libs
         INTERFACE ${CMAKE_SOURCE_DIR}/libs
 )
-
-# === MSVC Debug Info Format (if applicable) ===
-if (POLICY CMP0141)
-    cmake_policy(SET CMP0141 NEW)
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
-endif()
 
 # === DEPENDENCIES ===
 include(FetchContent)

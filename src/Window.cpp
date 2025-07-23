@@ -91,10 +91,13 @@ void VulkanWindow::Cleanup() {
 
 void VulkanWindow::UpdateUBO() {
 	MVP ubo{};
-    ubo.model = glm::mat4(1.0f);
-    ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	glm::vec3 spawnPosition = glm::vec3(10.0f, -5.0f, 0.0f);
+
+    ubo.model = glm::translate(glm::mat4(1.0f), spawnPosition);
+	ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	float aspectRatio = static_cast<float>(m_SwapChainFactory->Extent.width) / m_SwapChainFactory->Extent.height;
     ubo.proj = m_Camera->GetProjectionMatrix(aspectRatio);
+	ubo.cameraPos = m_Camera->position;
 
     Buffer::UploadData(m_UniformBufferInfo, &ubo, sizeof(ubo));
 

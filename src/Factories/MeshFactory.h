@@ -21,6 +21,7 @@ struct MVP {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+    alignas(16) glm::vec3 cameraPos;
 };
 
 struct Material {
@@ -37,16 +38,18 @@ struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
+    glm::vec3 normal;
 
     static vk::VertexInputBindingDescription getBindingDescription() {
         return { 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
     }
 
-    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions() {
+    static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescriptions() {
         return {
             vk::VertexInputAttributeDescription{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) },
             vk::VertexInputAttributeDescription{ 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) },
-            vk::VertexInputAttributeDescription{ 2, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, texCoord) }
+            vk::VertexInputAttributeDescription{ 2, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, texCoord) },
+            vk::VertexInputAttributeDescription{ 3, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, normal) }
         };
     }
 };
@@ -95,7 +98,7 @@ public:
                            std::vector<vk::ImageView> &textureImageViews, VmaAllocator &allocator,
                            std::deque<std::function<void(VmaAllocator)>> &deletionQueue, vk::raii::Device &device,
                            const vk::raii::CommandPool &cmdPool, const vk::raii::Queue &graphicsQueue,
-                           ResourceTracker *allocTracker);
+                           ResourceTracker *allocTracker, vk::Format format);
 
 private:
     std::unique_ptr<Buffer> m_MeshBuffer = std::make_unique<Buffer>();
