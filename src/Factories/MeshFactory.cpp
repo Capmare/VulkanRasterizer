@@ -11,18 +11,17 @@
 #include "ResourceTracker.h"
 
 std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
-    const std::string &path,
-    VmaAllocator &allocator,
-    std::deque<std::function<void(VmaAllocator)>> &deletionQueue,
-    const vk::CommandBuffer &commandBuffer,
+    const std::string& path,
+    VmaAllocator& allocator,
+    std::deque<std::function<void(VmaAllocator)>>& deletionQueue,
+    const vk::CommandBuffer& commandBuffer,
     const vk::raii::Queue& graphicsQueue,
-    vk::raii::Device &device,
+    vk::raii::Device& device,
     const vk::raii::CommandPool& cmdPool,
     std::vector<ImageResource>& textures,
     std::vector<vk::ImageView>& textureImageViews,
     ResourceTracker* allocTracker
 ) {
-    // Load scene with Assimp
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path,
         aiProcess_Triangulate |
@@ -41,21 +40,21 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     std::function<void(aiNode*, const aiScene*)> processNode;
     processNode = [&](aiNode* node, const aiScene* currentScene) {
         for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-            aiMesh* mesh = currentScene->mMeshes[node->mMeshes[i]];
-            aiMaterial* material = currentScene->mMaterials[mesh->mMaterialIndex];
+            aiMesh* ai_mesh = currentScene->mMeshes[node->mMeshes[i]];
+            aiMaterial* materialPtr = currentScene->mMaterials[ai_mesh->mMaterialIndex];
 
             // Process vertices
             std::vector<Vertex> vertices;
-            vertices.reserve(mesh->mNumVertices);
+            vertices.reserve(ai_mesh->mNumVertices);
             aiMatrix4x4 transform = currentScene->mRootNode->mTransformation;
 
-            for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+            for (unsigned int v = 0; v < ai_mesh->mNumVertices; ++v) {
                 Vertex vert{};
-                aiVector3D aiPosition = transform * mesh->mVertices[v];
+                aiVector3D aiPosition = transform * ai_mesh->mVertices[v];
                 vert.pos = glm::vec3(aiPosition.x, aiPosition.y, aiPosition.z);
 
-                if (mesh->HasTextureCoords(0)) {
-                    vert.texCoord = glm::vec2(mesh->mTextureCoords[0][v].x, mesh->mTextureCoords[0][v].y);
+                if (ai_mesh->HasTextureCoords(0)) {
+                    vert.texCoord = glm::vec2(ai_mesh->mTextureCoords[0][v].x, ai_mesh->mTextureCoords[0][v].y);
                 } else {
                     vert.texCoord = glm::vec2(0.0f);
                 }
@@ -64,57 +63,38 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
             // Process indices
             std::vector<uint32_t> indices;
-            for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
-                const aiFace& face = mesh->mFaces[f];
+            for (unsigned int f = 0; f < ai_mesh->mNumFaces; ++f) {
+                const aiFace& face = ai_mesh->mFaces[f];
                 for (unsigned int j = 0; j < face.mNumIndices; ++j)
                     indices.push_back(face.mIndices[j]);
             }
 
-            int textureIdx = -1;
-            if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-                aiString texPath;
-                if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS) {
-                    std::string fullPath = (baseDir / texPath.C_Str()).string();
-
-                    if (textureCache.contains(fullPath)) {
-                        textureIdx = textureCache[fullPath];
-                    } else {
-                        // Load texture and create ImageView
-                        auto texture = ImageFactory::LoadTexture(
-                            m_MeshBuffer.get(), fullPath, device, allocator, cmdPool,
-                            graphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, allocTracker);
-
-                        textures.emplace_back(texture);
-                        auto imageView = ImageFactory::CreateImageView(
-                            device, texture.image, vk::Format::eR8G8B8A8Srgb,
-                            vk::ImageAspectFlagBits::eColor, allocTracker,
-                            "textureImageView: " + fullPath);
-
-                        textureImageViews.emplace_back(imageView);
-                        textureIdx = static_cast<int>(textures.size() - 1);
-                        textureCache[fullPath] = textureIdx;
-
-                        VmaAllocation allocation = texture.allocation;
-                        vk::Image imgHandle = texture.image;
-                        vk::ImageView imgViewHandle = imageView;
-
-                        deletionQueue.emplace_back([allocation, imgHandle, imgViewHandle, &device, allocTracker](VmaAllocator alloc) {
-                            allocTracker->UntrackImageView(imgViewHandle);
-                            vkDestroyImageView(*device, imgViewHandle, nullptr);
-
-                            vkDestroyImage(*device, imgHandle, nullptr);
-                            allocTracker->UntrackAllocation(allocation);
-                            vmaFreeMemory(alloc, allocation);
-                        });
+            // Load material textures
+            Material material{};
+            auto loadTextureIndex = [&](aiMaterial* mat, aiTextureType type) -> int {
+                if (mat->GetTextureCount(type) > 0) {
+                    aiString texPath;
+                    if (mat->GetTexture(type, 0, &texPath) == AI_SUCCESS) {
+                        return LoadTextureGeneric(scene, texPath.C_Str(), baseDir, textureCache,
+                                                  textures, textureImageViews,
+                                                  allocator, deletionQueue, device, cmdPool, graphicsQueue, allocTracker);
                     }
                 }
-            }
+                return -1;
+            };
+
+            material.diffuseIdx   = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE);
+            material.normalIdx    = loadTextureIndex(materialPtr, aiTextureType_NORMALS);
+            material.metallicIdx  = loadTextureIndex(materialPtr, aiTextureType_METALNESS);
+            material.roughnessIdx = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE_ROUGHNESS);
+            material.aoIdx        = loadTextureIndex(materialPtr, aiTextureType_AMBIENT_OCCLUSION);
+            material.emissiveIdx  = loadTextureIndex(materialPtr, aiTextureType_EMISSIVE);
 
             // Build GPU buffers for mesh
             Mesh meshObj = Build_Mesh(
                 allocator, deletionQueue, commandBuffer, graphicsQueue,
                 vertices, indices, allocTracker, "Mesh");
-            meshObj.m_TextureIdx = textureIdx;
+            meshObj.m_Material = material;
 
             meshes.push_back(meshObj);
         }
@@ -126,6 +106,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     processNode(scene->mRootNode, scene);
     return meshes;
 }
+
 
 Mesh MeshFactory::Build_Mesh(
     VmaAllocator &allocator,
@@ -191,3 +172,57 @@ Mesh MeshFactory::Build_Mesh(
 
     return mesh;
 }
+
+
+
+int MeshFactory::LoadTextureGeneric(
+    const aiScene* scene,
+    const std::string& texPathStr,
+    const std::filesystem::path& baseDir,
+    std::unordered_map<std::string, uint32_t>& textureCache,
+    std::vector<ImageResource>& textures,
+    std::vector<vk::ImageView>& textureImageViews,
+    VmaAllocator& allocator,
+    std::deque<std::function<void(VmaAllocator)>>& deletionQueue,
+    vk::raii::Device& device,
+    const vk::raii::CommandPool& cmdPool,
+    const vk::raii::Queue& graphicsQueue,
+    ResourceTracker* allocTracker
+) {
+    std::string fullPath = (baseDir / texPathStr).string();
+
+    if (textureCache.contains(fullPath)) {
+        return textureCache[fullPath];
+    }
+
+    auto texture = ImageFactory::LoadTexture(
+        m_MeshBuffer.get(), fullPath, device, allocator, cmdPool,
+        graphicsQueue, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, allocTracker);
+
+    textures.emplace_back(texture);
+
+    auto imageView = ImageFactory::CreateImageView(
+        device, texture.image, vk::Format::eR8G8B8A8Srgb,
+        vk::ImageAspectFlagBits::eColor, allocTracker,
+        "textureImageView: " + fullPath);
+
+    textureImageViews.emplace_back(imageView);
+    int textureIdx = static_cast<int>(textures.size() - 1);
+    textureCache[fullPath] = textureIdx;
+
+    // Cleanup function
+    VmaAllocation allocation = texture.allocation;
+    vk::Image imgHandle = texture.image;
+    vk::ImageView imgViewHandle = imageView;
+
+    deletionQueue.emplace_back([allocation, imgHandle, imgViewHandle, &device, allocTracker](VmaAllocator alloc) {
+        allocTracker->UntrackImageView(imgViewHandle);
+        vkDestroyImageView(*device, imgViewHandle, nullptr);
+        vkDestroyImage(*device, imgHandle, nullptr);
+        allocTracker->UntrackAllocation(allocation);
+        vmaFreeMemory(alloc, allocation);
+    });
+
+    return textureIdx;
+}
+

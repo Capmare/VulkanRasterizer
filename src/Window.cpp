@@ -493,7 +493,7 @@ void VulkanWindow::DrawFrame() {
 	for (const auto& mesh: m_Meshes) {
 		m_CommandBuffers[imageIndex]->bindVertexBuffers(0,{mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
 		m_CommandBuffers[imageIndex]->bindIndexBuffer(mesh.m_IndexBufferInfo.m_Buffer,0,vk::IndexType::eUint32);
-		m_CommandBuffers[imageIndex]->pushConstants(*m_PipelineLayout,vk::ShaderStageFlagBits::eFragment,0,vk::ArrayProxy<const uint32_t>{mesh.m_TextureIdx});
+		m_CommandBuffers[imageIndex]->pushConstants(*m_PipelineLayout,vk::ShaderStageFlagBits::eFragment,0,vk::ArrayProxy<const Material>{mesh.m_Material});
 		m_CommandBuffers[imageIndex]->drawIndexed(mesh.m_IndexCount,1,0,0,0);
 
 
@@ -687,7 +687,7 @@ void VulkanWindow::CreatePipelineLayout() {
 
 	vk::PushConstantRange pushConstantRange{};
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(uint32_t);
+	pushConstantRange.size = sizeof(Material);
 	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
 	vk::PipelineLayoutCreateInfo layoutInfo{};

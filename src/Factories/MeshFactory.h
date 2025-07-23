@@ -11,6 +11,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include "ImageFactory.h"
+#include "assimp/scene.h"
 #include "vma/vk_mem_alloc.h"
 #include "glm/glm.hpp"
 #include "vulkan/vulkan_raii.hpp"
@@ -20,6 +21,15 @@ struct MVP {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+};
+
+struct Material {
+    int diffuseIdx = -1;
+    int normalIdx = -1;
+    int metallicIdx = -1;
+    int roughnessIdx = -1;
+    int aoIdx = -1;
+    int emissiveIdx = -1;
 };
 
 
@@ -51,7 +61,7 @@ struct Mesh
     VkDeviceSize m_IndexOffset;
     uint32_t m_IndexCount;
 
-    uint32_t m_TextureIdx{};
+    Material m_Material;
 
 };
 
@@ -79,10 +89,13 @@ public:
                     const std::vector<Vertex> &vertices, std::vector<uint32_t> indices, ResourceTracker *AllocationTracker, const std::
                     string &AllocName);
 
-
-
-
-
+    int LoadTextureGeneric(const aiScene *scene, const std::string &texPathStr, const std::filesystem::path &baseDir,
+                           std::unordered_map<std::string, uint32_t> &textureCache,
+                           std::vector<ImageResource> &textures,
+                           std::vector<vk::ImageView> &textureImageViews, VmaAllocator &allocator,
+                           std::deque<std::function<void(VmaAllocator)>> &deletionQueue, vk::raii::Device &device,
+                           const vk::raii::CommandPool &cmdPool, const vk::raii::Queue &graphicsQueue,
+                           ResourceTracker *allocTracker);
 
 private:
     std::unique_ptr<Buffer> m_MeshBuffer = std::make_unique<Buffer>();

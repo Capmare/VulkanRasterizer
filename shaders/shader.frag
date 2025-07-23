@@ -12,13 +12,21 @@ layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
 layout (push_constant) uniform constants
 {
     uint Diffuse;
+    uint Normal;
+    uint Metallic;
+    uint Roughness;
+    uint AO;
+    uint Emmisive;
+
 } textureIndices;
+
+
 
 layout (set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
 
 
 void main() {
-    vec4 texColor = texture(sampler2D(textures[nonuniformEXT(textureIndices.Diffuse)], texSampler), fragTexCoord);
+    vec4 texColor = texture(sampler2D(textures[nonuniformEXT(textureIndices.Normal)], texSampler), fragTexCoord);
     outColor = texColor;
 }
