@@ -770,6 +770,19 @@ void VulkanWindow::CreateDepthPrepassPipeline() {
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
+
+	uint32_t textureCount = static_cast<uint32_t>(m_ImageResource.size());
+
+	vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
+
+	// Data buffer holding the value
+	vk::SpecializationInfo specializationInfo;
+	specializationInfo.mapEntryCount = 1;
+	specializationInfo.pMapEntries = &specializationEntry;
+	specializationInfo.dataSize = sizeof(textureCount);
+	specializationInfo.pData = &textureCount;
+
+
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask =
 		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
@@ -814,6 +827,7 @@ void VulkanWindow::CreateDepthPrepassPipeline() {
 	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
 	fragmentStageInfo.setModule(*m_DepthShaderModules[1]); // vertex shader module
 	fragmentStageInfo.setPName("main");
+	fragmentStageInfo.pSpecializationInfo = &specializationInfo;
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
 
@@ -847,7 +861,7 @@ void VulkanWindow::CreateGraphicsPipeline() {
 	vk::PipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.depthTestEnable = VK_TRUE;
 	depthStencil.depthWriteEnable = VK_FALSE;
-	depthStencil.depthCompareOp = vk::CompareOp::eLessOrEqual;
+	depthStencil.depthCompareOp = vk::CompareOp::eEqual;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
 
@@ -889,7 +903,7 @@ void VulkanWindow::CreateGraphicsPipeline() {
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 
-	uint32_t textureCount = static_cast<uint32_t>(m_SwapChainImages.size());
+	uint32_t textureCount = static_cast<uint32_t>(m_ImageResource.size());
 
 	vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
 
