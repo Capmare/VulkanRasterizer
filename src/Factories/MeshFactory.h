@@ -49,7 +49,13 @@ struct Vertex {
             vk::VertexInputAttributeDescription{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) },
             vk::VertexInputAttributeDescription{ 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) },
             vk::VertexInputAttributeDescription{ 2, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, texCoord) },
-            vk::VertexInputAttributeDescription{ 3, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, normal) }
+            vk::VertexInputAttributeDescription{ 3, 0, vk::Format::eR32G32B32Sfloat,    offsetof(Vertex, normal) }
+        };
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 1> getDepthAttributeDescriptions() {
+        return {
+            vk::VertexInputAttributeDescription{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) }
         };
     }
 };

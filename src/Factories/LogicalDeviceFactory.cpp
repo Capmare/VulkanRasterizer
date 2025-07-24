@@ -50,7 +50,8 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+        VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME
     };
 
     vk::DeviceCreateInfo DeviceCreateInfo(
@@ -64,9 +65,15 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
         nullptr
     );
 
+    vk::PhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
+    dynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = VK_TRUE;
+    dynamicRenderingUnusedAttachmentsFeatures.pNext = nullptr;
+
     vk::PhysicalDeviceVulkan13Features Vulkan13Features = {};
     Vulkan13Features.dynamicRendering = VK_TRUE;
     Vulkan13Features.synchronization2 = VK_TRUE;
+    Vulkan13Features.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
+
 
     vk::PhysicalDeviceVulkan12Features Vulkan12Features = {};
     Vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
@@ -76,7 +83,9 @@ vk::raii::Device LogicalDeviceFactory::Build_Device(const vk::raii::PhysicalDevi
     Features.features.samplerAnisotropy = VK_TRUE;
     Features.pNext = &Vulkan12Features;
 
+
     DeviceCreateInfo.pNext = &Features;
+
 
 
     try {

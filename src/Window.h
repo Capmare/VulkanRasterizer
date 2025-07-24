@@ -77,6 +77,8 @@ private:
 
 	void CreatePipelineLayout();
 
+	void CreateDepthPrepassPipeline();
+
 	void CreateGraphicsPipeline();
 
 	void CreateCommandBuffers();
@@ -105,7 +107,8 @@ private:
 	std::unique_ptr<LogicalDeviceFactory> m_LogicalDeviceFactory{};
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
-	std::unique_ptr<GraphicsPipelineFactory> m_GraphicsPipelineFactory{};
+	std::unique_ptr<PipelineFactory> m_GraphicsPipelineFactory{};
+	std::unique_ptr<PipelineFactory> m_DepthPipelineFactory{};
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
 	std::unique_ptr<DepthImageFactory> m_DepthImageFactory{};
 
@@ -115,7 +118,8 @@ private:
 	std::unique_ptr<vk::raii::Device> m_Device{};
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
-	std::unique_ptr<vk::raii::Pipeline> m_Pipeline{};
+	std::unique_ptr<vk::raii::Pipeline> m_GraphicsPipeline{};
+	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
 
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore{};
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore{};
@@ -131,6 +135,8 @@ private:
 
 	std::vector<vk::ShaderEXT> rawShaders{};
 	std::vector<vk::raii::ShaderModule> m_ShaderModules{};
+	std::vector<vk::raii::ShaderModule> m_DepthShaderModules{};
+
 	std::unique_ptr<vk::raii::Sampler> m_Sampler{};
 
 	std::unique_ptr<vk::raii::CommandPool> m_CmdPool{};
@@ -187,5 +193,9 @@ private:
 	bool firstMouse = true;
 	float yaw = -90.0f;  // facing -Z
 	float pitch = 0.0f;
+
+
+	glm::vec3 spawnPosition = glm::vec3(10.0f, -5.0f, 0.0f);
+
 
 };

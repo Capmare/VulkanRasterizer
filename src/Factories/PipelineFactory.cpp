@@ -1,35 +1,35 @@
 #include "PipelineFactory.h"
 
 
-GraphicsPipelineFactory::GraphicsPipelineFactory(vk::raii::Device& device)
+PipelineFactory::PipelineFactory(vk::raii::Device& device)
     : m_Device(device) {}
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetShaderStages(const std::vector<vk::PipelineShaderStageCreateInfo>& stages) {
+PipelineFactory& PipelineFactory::SetShaderStages(const std::vector<vk::PipelineShaderStageCreateInfo>& stages) {
     m_ShaderStages = stages;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetVertexInput(const vk::PipelineVertexInputStateCreateInfo& vertexInput) {
+PipelineFactory& PipelineFactory::SetVertexInput(const vk::PipelineVertexInputStateCreateInfo& vertexInput) {
     m_VertexInput = vertexInput;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetInputAssembly(const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly) {
+PipelineFactory& PipelineFactory::SetInputAssembly(const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly) {
     m_InputAssembly = inputAssembly;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetRasterizer(const vk::PipelineRasterizationStateCreateInfo& rasterizer) {
+PipelineFactory& PipelineFactory::SetRasterizer(const vk::PipelineRasterizationStateCreateInfo& rasterizer) {
     m_Rasterizer = rasterizer;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetMultisampling(const vk::PipelineMultisampleStateCreateInfo& multisampling) {
+PipelineFactory& PipelineFactory::SetMultisampling(const vk::PipelineMultisampleStateCreateInfo& multisampling) {
     m_Multisampling = multisampling;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment) {
+PipelineFactory& PipelineFactory::SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment) {
     m_ColorBlendAttachment = attachment;
     m_ColorBlending = vk::PipelineColorBlendStateCreateInfo{}
         .setLogicOpEnable(false)
@@ -38,49 +38,41 @@ GraphicsPipelineFactory& GraphicsPipelineFactory::SetColorBlendAttachment(const 
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates) {
+PipelineFactory& PipelineFactory::SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates) {
     m_DynamicStates = dynamicStates;
     m_DynamicStateInfo = vk::PipelineDynamicStateCreateInfo{}
         .setDynamicStates(m_DynamicStates);
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetLayout(vk::raii::PipelineLayout& layout) {
+PipelineFactory& PipelineFactory::SetLayout(vk::raii::PipelineLayout& layout) {
     m_PipelineLayout = &layout;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetColorFormat(vk::Format colorFormat) {
+PipelineFactory& PipelineFactory::SetColorFormat(vk::Format colorFormat) {
     m_ColorFormat = colorFormat;
     return *this;
 }
 
-GraphicsPipelineFactory& GraphicsPipelineFactory::SetDepthFormat(vk::Format depthFormat) {
+PipelineFactory& PipelineFactory::SetDepthFormat(vk::Format depthFormat) {
     m_DepthFormat = depthFormat;
-
-    m_DepthStencil = vk::PipelineDepthStencilStateCreateInfo{}
-        .setDepthTestEnable(true)
-        .setDepthWriteEnable(true)
-        .setDepthCompareOp(vk::CompareOp::eLess)
-        .setDepthBoundsTestEnable(false)
-        .setStencilTestEnable(false);
-
     return *this;
 }
 
-GraphicsPipelineFactory & GraphicsPipelineFactory::SetDepthStencil(
+PipelineFactory & PipelineFactory::SetDepthStencil(
     const vk::PipelineDepthStencilStateCreateInfo &depthStencil) {
     m_DepthStencil = depthStencil;
     return *this;
 }
 
-GraphicsPipelineFactory & GraphicsPipelineFactory::SetViewportState(
+PipelineFactory & PipelineFactory::SetViewportState(
     const vk::PipelineViewportStateCreateInfo &viewportState) {
     m_ViewportState = viewportState;
     return *this;
 }
 
-vk::raii::Pipeline GraphicsPipelineFactory::Build() {
+vk::raii::Pipeline PipelineFactory::Build() {
     vk::PipelineRenderingCreateInfoKHR renderingInfo{};
     renderingInfo.setColorAttachmentCount(1);
     renderingInfo.setPColorAttachmentFormats(&m_ColorFormat);

@@ -4,22 +4,22 @@
 #include <vulkan/vulkan.hpp>
 #include "vulkan/vulkan_raii.hpp"
 
-class GraphicsPipelineFactory {
+class PipelineFactory {
 public:
-    GraphicsPipelineFactory(vk::raii::Device& device);
+    PipelineFactory(vk::raii::Device& device);
 
-    GraphicsPipelineFactory& SetShaderStages(const std::vector<vk::PipelineShaderStageCreateInfo>& stages);
-    GraphicsPipelineFactory& SetVertexInput(const vk::PipelineVertexInputStateCreateInfo& vertexInput);
-    GraphicsPipelineFactory& SetInputAssembly(const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly);
-    GraphicsPipelineFactory& SetRasterizer(const vk::PipelineRasterizationStateCreateInfo& rasterizer);
-    GraphicsPipelineFactory& SetMultisampling(const vk::PipelineMultisampleStateCreateInfo& multisampling);
-    GraphicsPipelineFactory& SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment);
-    GraphicsPipelineFactory& SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates);
-    GraphicsPipelineFactory& SetLayout(vk::raii::PipelineLayout& layout);
-    GraphicsPipelineFactory& SetColorFormat(vk::Format colorFormat);
-    GraphicsPipelineFactory& SetDepthFormat(vk::Format depthFormat);
-    GraphicsPipelineFactory& SetDepthStencil(const vk::PipelineDepthStencilStateCreateInfo& depthStencil);
-    GraphicsPipelineFactory& SetViewportState(const vk::PipelineViewportStateCreateInfo& viewportState);
+    PipelineFactory& SetShaderStages(const std::vector<vk::PipelineShaderStageCreateInfo>& stages);
+    PipelineFactory& SetVertexInput(const vk::PipelineVertexInputStateCreateInfo& vertexInput);
+    PipelineFactory& SetInputAssembly(const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly);
+    PipelineFactory& SetRasterizer(const vk::PipelineRasterizationStateCreateInfo& rasterizer);
+    PipelineFactory& SetMultisampling(const vk::PipelineMultisampleStateCreateInfo& multisampling);
+    PipelineFactory& SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment);
+    PipelineFactory& SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates);
+    PipelineFactory& SetLayout(vk::raii::PipelineLayout& layout);
+    PipelineFactory& SetColorFormat(vk::Format colorFormat);
+    PipelineFactory& SetDepthFormat(vk::Format depthFormat);
+    PipelineFactory& SetDepthStencil(const vk::PipelineDepthStencilStateCreateInfo& depthStencil);
+    PipelineFactory& SetViewportState(const vk::PipelineViewportStateCreateInfo& viewportState);
 
     vk::raii::Pipeline Build();
 
