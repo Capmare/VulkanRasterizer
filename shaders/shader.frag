@@ -1,6 +1,11 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: require
 
+
+//#define CAMERA_PRESET_SUNNY16
+#define CAMERA_PRESET_INDOOR
+
+
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragWorldPos;
@@ -29,107 +34,146 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     vec3 cameraPos;
 } ubo;
 
+// Point light
+const vec3 pointLightPos = vec3(5.f, -5.f, 0.0);
+const vec3 pointLightColor = vec3(1.0, 0.3, 0.3);
+const float pointLightIntensity = 10.0;
 
-// x fata spate
-// y sus jos
-// z stanga dreapta
-
-const vec3 lightPos = vec3(5.f, -5.f, 0.0);
-const vec3 lightColor = vec3(1.0, 0.95, 0.9);
-const float lightIntensity = 10;
+// Directional light
+const vec3 dirLightDirection = normalize(vec3(-1.0, -0.2, -0.1));
+const vec3 dirLightColor     = vec3(1.0, 0.96, 0.9);
+const float dirLightIntensity = 2.5;
 
 vec3 sampleNormal() {
     vec3 normalColor = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), fragTexCoord).xyz;
-    normalColor = normalColor * 2.0 - 1.0; // Map [0,1] → [-1,1]
+    normalColor.g = 1.0 - normalColor.g; // Flip Y channel
+    normalColor = normalColor * 2.0 - 1.0;
     return normalize(normalColor);
 }
 
-float DistributionGGX(vec3 N, vec3 H, float roughness)
-{
-    float a      = roughness*roughness;
-    float a2     = a*a;
-    float NdotH  = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH*NdotH;
 
-    float num   = a2;
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
+    denom = 3.1415 * denom * denom;
 
-    return num / denom;
+    return a2 / denom;
 }
 
-float GeometrySchlickGGX(float NdotV, float roughness)
-{
+float GeometrySchlickGGX(float NdotV, float roughness) {
     float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
+    float k = (r * r) / 8.0;
 
-    float num   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
-
-    return num / denom;
+    return NdotV / denom;
 }
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
-{
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     float NdotV = max(dot(N, V), 0.0);
     float NdotL = max(dot(N, L), 0.0);
-    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
-
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
     return ggx1 * ggx2;
 }
+
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-void main() {
 
+
+
+#ifdef CAMERA_PRESET_SUNNY16
+    const float aperture     = 5.0f;
+    const float ISO          = 100.0f;
+    const float shutterSpeed = 1.0f / 200.0f;
+#endif
+
+#ifdef CAMERA_PRESET_INDOOR
+    const float aperture     = 1.4f;
+    const float ISO          = 1600.0f;
+    const float shutterSpeed = 1.0f / 60.0f;
+#endif
+
+
+
+void main() {
     vec3 albedo = texture(sampler2D(textures[nonuniformEXT(material.Diffuse)], texSampler), fragTexCoord).rgb;
     float metallic = texture(sampler2D(textures[nonuniformEXT(material.Metallic)], texSampler), fragTexCoord).b;
     float roughness = texture(sampler2D(textures[nonuniformEXT(material.Roughness)], texSampler), fragTexCoord).g;
 
     vec3 N = sampleNormal();
     vec3 V = normalize(ubo.cameraPos - fragWorldPos);
-
     vec3 F0 = vec3(0.04);
-    F0 = mix(F0,albedo,metallic);
+    F0 = mix(F0, albedo, metallic);
 
     vec3 Lo = vec3(0.0);
 
-    vec3 L = normalize(lightPos-fragWorldPos);
-    vec3 H = normalize(V+L);
-    float distance = length(lightPos-fragWorldPos);
-    float attenuation = 1.0 / (distance* distance);
-    vec3 radiance = lightColor * attenuation * lightIntensity;
+    // Point Light
+    vec3 Lp = normalize(pointLightPos - fragWorldPos);
+    vec3 Hp = normalize(V + Lp);
+    float distance = length(pointLightPos - fragWorldPos);
+    float attenuation = 1.0 / (distance * distance);
+    vec3 radiance_p = pointLightColor * attenuation * pointLightIntensity;
 
-    float NDF = DistributionGGX(N,H,roughness);
-    float G = GeometrySmith(N,V,L,roughness);
-    vec3 F = fresnelSchlick(max(dot(H,V),0.0),F0);
+    float NDF_p = DistributionGGX(N, Hp, roughness);
+    float G_p = GeometrySmith(N, V, Lp, roughness);
+    vec3 F_p = fresnelSchlick(max(dot(Hp, V), 0.0), F0);
 
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
+    vec3 kS_p = F_p;
+    vec3 kD_p = vec3(1.0) - kS_p;
+    kD_p *= 1.0 - metallic;
 
-    vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N,V),0.0) * max(dot(N,L),0.0) + 0.0001;
-    vec3 specular = numerator / denominator;
+    vec3 numerator_p = NDF_p * G_p * F_p;
+    float denominator_p = 4.0 * max(dot(N, V), 0.0) * max(dot(N, Lp), 0.0) + 0.0001;
+    vec3 specular_p = numerator_p / denominator_p;
 
-    float NDotL = max(dot(N,L),0.0);
-    Lo += (kD * albedo / 3.1415 + specular) * radiance * NDotL;
+    float NDotLp = max(dot(N, Lp), 0.0);
+    Lo += (kD_p * albedo / 3.1415 + specular_p) * radiance_p * NDotLp;
+
+    // Directional Light
+    vec3 Ld = normalize(-dirLightDirection);
+    vec3 Hd = normalize(V + Ld);
+    vec3 radiance_d = dirLightColor * dirLightIntensity;
+
+    float NDF_d = DistributionGGX(N, Hd, roughness);
+    float G_d = GeometrySmith(N, V, Ld, roughness);
+    vec3 F_d = fresnelSchlick(max(dot(Hd, V), 0.0), F0);
+
+    vec3 kS_d = F_d;
+    vec3 kD_d = vec3(1.0) - kS_d;
+    kD_d *= 1.0 - metallic;
+
+    vec3 numerator_d = NDF_d * G_d * F_d;
+    float denominator_d = 4.0 * max(dot(N, V), 0.0) * max(dot(N, Ld), 0.0) + 0.0001;
+    vec3 specular_d = numerator_d / denominator_d;
+
+    float NDotLd = max(dot(N, Ld), 0.0);
+    Lo += (kD_d * albedo / 3.1415 + specular_d) * radiance_d * NDotLd;
+
 
     vec3 ambient = vec3(0.03) * albedo;
+
+    // Combine all lighting
     vec3 color = ambient + Lo;
 
+    // Physical Camera Exposure
+    float Ev100 = log2((aperture * aperture) / shutterSpeed * 100.0 / ISO);
+    float exposure = 1.0 / (1.2 * pow(2.0, Ev100));
+    color *= exposure;
+
+    // HDR tonemapping and gamma correction
     color = color / (color + vec3(1.0));
-    color = pow(color,vec3(1.0/2.2));
-
-
+    color = pow(color, vec3(1.0 / 2.2));
 
     outColor = vec4(color, 1.0);
-    // for debugging purposes debugging
 
-    // outColor = vec4(N * 0.5 + 0.5, 1.0); // normals , should look like a rainbow
-    // outColor = vec4(vec3(NdotL), 1.0); // N*L, normals might be flipped if its nearly dark
-    // outColor = vec4(radiance, 1.0);
-
-
+    // Debug outputs
+    // outColor = vec4(N * 0.5 + 0.5, 1.0);        // Normal visualization
+    // outColor = vec4(vec3(NDotLp), 1.0);         // Dot(N, Lp) visualization
+    // outColor = vec4(radiance_d, 1.0);           // Directional light intensity
 }
