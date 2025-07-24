@@ -101,6 +101,26 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 
 
+vec3 Uncharted2ToneMappingCurve(in vec3 x) {
+    const float A = 0.15;
+    const float B = 0.50;
+    const float C = 0.10;
+    const float D = 0.20;
+    const float E = 0.02;
+    const float F = 0.30;
+
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+vec3 Uncharted2ToneMapping(in vec3 color) {
+    const float whitePoint = 11.2;
+    vec3 mapped = Uncharted2ToneMappingCurve(color);
+    float exposureNormalization = 1.0 / Uncharted2ToneMappingCurve(vec3(whitePoint)).r;
+
+    return clamp(mapped * exposureNormalization, 0.0, 1.0);
+}
+
+
 void main() {
     vec3 albedo = texture(sampler2D(textures[nonuniformEXT(material.Diffuse)], texSampler), fragTexCoord).rgb;
     float metallic = texture(sampler2D(textures[nonuniformEXT(material.Metallic)], texSampler), fragTexCoord).b;
@@ -166,8 +186,7 @@ void main() {
     float exposure = 1.0 / (1.2 * pow(2.0, Ev100));
     color *= exposure;
 
-    // HDR tonemapping and gamma correction
-    color = color / (color + vec3(1.0));
+    color = Uncharted2ToneMapping(color);
     color = pow(color, vec3(1.0 / 2.2));
 
     outColor = vec4(color, 1.0);
