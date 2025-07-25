@@ -19,7 +19,6 @@
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include "vmaFile.h"
-#include <SDL2/SDL.h>
 
 
 
@@ -675,7 +674,7 @@ void VulkanWindow::LoadMesh() {
 	m_MeshFactory = std::make_unique<MeshFactory>();
 	m_MeshCmdBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool)));
 
-	m_Meshes = m_MeshFactory->LoadModelFromGLTF("../models/sponza/Sponza.gltf",
+	m_Meshes = m_MeshFactory->LoadModelFromGLTF("models/sponza/Sponza.gltf",
 	                                            m_VmaAllocator,m_VmaAllocatorsDeletionQueue,
 	                                            **m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
 	                                            *m_CmdPool,m_ImageResource,
@@ -781,17 +780,17 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 }
 
 void VulkanWindow::CreateShaderModules() {
-	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/vert.spv", "../shaders/frag.spv");
+	auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/vert.spv", "shaders/frag.spv");
 	for (auto& shader : ShaderModules) {
 		m_ShaderModule.emplace_back(std::move(shader));
 	}
 
-	auto DepthShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/DepthVert.spv", "../shaders/DepthFrag.spv");
+	auto DepthShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/DepthVert.spv", "shaders/DepthFrag.spv");
 	for (auto& shader : DepthShaderModules) {
 		m_DepthShaderModules.emplace_back(std::move(shader));
 	}
 
-	auto GbufferShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "../shaders/GbufferVert.spv", "../shaders/GbufferFrag.spv");
+	auto GbufferShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/GbufferVert.spv", "shaders/GbufferFrag.spv");
 	for (auto& shader : GbufferShaderModules) {
 		m_GBufferShaderModules.emplace_back(std::move(shader));
 	}

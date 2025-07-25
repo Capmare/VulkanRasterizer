@@ -161,7 +161,6 @@ private:
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
 
-
 	std::unique_ptr<vk::raii::Pipeline> m_GraphicsPipeline{};
 	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
 	std::unique_ptr<vk::raii::Pipeline> m_GBufferPipeline{};
@@ -176,7 +175,6 @@ private:
 
 	vk::raii::Context m_Context{};
 	bool m_bFrameBufferResized{ false };
-
 
 	std::vector<vk::ShaderEXT> rawShaders{};
 	std::vector<vk::raii::ShaderModule> m_ShaderModules{};
@@ -193,7 +191,6 @@ private:
 
 	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool{};
 	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout{};
-
 
 	std::vector<vk::raii::ShaderModule> m_ShaderModule{};
 
@@ -215,7 +212,6 @@ private:
 
 	BufferInfo m_UniformBufferInfo{};
 
-
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
 	std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets{};
@@ -233,7 +229,6 @@ private:
 
 	std::unique_ptr<Camera> m_Camera{};
 
-
 	glm::vec3 cameraPos = glm::vec3(20.f, 0.f, 0.f);
 	glm::vec3 cameraFront = glm::vec3(-1.f, 0.f, 0.f);
 	glm::vec3 cameraUp = glm::vec3(0.f, 1.f, 0.f);
@@ -241,7 +236,6 @@ private:
 
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
-
 
 	double lastX = 400, lastY = 300;
 	bool firstMouse = true;

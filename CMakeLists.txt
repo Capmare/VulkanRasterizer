@@ -36,26 +36,14 @@ add_custom_target(compileShaders ALL
 add_dependencies(${PROJECT_NAME} compileShaders)
 
 # === COPY TEXTURES ===
-file(GLOB TEXTURES "${CMAKE_SOURCE_DIR}/models/textures/*.*")
-foreach(TEX ${TEXTURES})
-    get_filename_component(TEXTURE ${TEX} NAME)
-    add_custom_command(
-            TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${TEX} "${CMAKE_BINARY_DIR}/models/textures/${TEXTURE}"
-            COMMENT "Copying ${TEXTURE}"
-    )
-endforeach()
+add_custom_command(POST_BUILD TARGET ${PROJECT_NAME}
+   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+   ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders)
 
 # === COPY MODELS ===
-file(GLOB MODELS "${CMAKE_SOURCE_DIR}/models/*.*")
-foreach(MODEL ${MODELS})
-    get_filename_component(MODEL_NAME ${MODEL} NAME)
-    add_custom_command(
-            TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${MODEL} "${CMAKE_BINARY_DIR}/models/${MODEL_NAME}"
-            COMMENT "Copying ${MODEL_NAME}"
-    )
-endforeach()
+add_custom_command(POST_BUILD TARGET ${PROJECT_NAME}
+   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+   ${CMAKE_SOURCE_DIR}/models $<TARGET_FILE_DIR:${PROJECT_NAME}>/models)
 
 # === INCLUDE PATHS ===
 target_include_directories(${PROJECT_NAME}
@@ -98,14 +86,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(VMA)
 target_include_directories(${PROJECT_NAME} PRIVATE ${vma_SOURCE_DIR}/include)
-
-FetchContent_Declare(
-        vulkan_hpp
-        GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Hpp.git
-        GIT_TAG v1.3.290
-)
-FetchContent_MakeAvailable(vulkan_hpp)
-target_include_directories(${PROJECT_NAME} PRIVATE ${vulkan_hpp_SOURCE_DIR})
 
 # === VULKAN LINK ===
 find_package(Vulkan REQUIRED)
