@@ -301,6 +301,8 @@ void VulkanWindow::InitVulkan() {
 	}
 
 
+	CreateGBuffer();
+
 	CreateDescriptorPools();
 	CreateFrameDescriptorSets();
 	LoadMesh();
@@ -351,7 +353,6 @@ void VulkanWindow::InitVulkan() {
 	});
 
 	CreateShaderModules();
-	CreateGBuffer();
 
 	CreateDescriptorSets();
 	CreatePipelineLayout();
@@ -474,7 +475,7 @@ void VulkanWindow::TransitionInitialLayouts(uint32_t imageIndex) {
 
 }
 
-void VulkanWindow::DepthPrepass(uint32_t imageIndex, int width, int height) const {
+void VulkanWindow::DepthPrepass(uint32_t imageIndex, int width, int height) {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
 
@@ -501,19 +502,14 @@ void VulkanWindow::DepthPrepass(uint32_t imageIndex, int width, int height) cons
     DrawMeshes(imageIndex);
     m_CommandBuffers[imageIndex]->endRendering();
 
-    vk::ImageMemoryBarrier2 depthBarrier{};
-    depthBarrier.srcStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests;
-    depthBarrier.srcAccessMask = vk::AccessFlagBits2::eDepthStencilAttachmentWrite;
-    depthBarrier.dstStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests;
-    depthBarrier.dstAccessMask = vk::AccessFlagBits2::eDepthStencilAttachmentRead;
-    depthBarrier.oldLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-    depthBarrier.newLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-    depthBarrier.image = m_DepthImage.image;
-    depthBarrier.subresourceRange = {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1};
+	ImageFactory::ShiftImageLayout(*m_CommandBuffers[imageIndex],
+		m_DepthImage,
+		vk::ImageLayout::eDepthAttachmentOptimal,
+		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+		vk::AccessFlagBits::eDepthStencilAttachmentRead,
+		vk::PipelineStageFlagBits::eEarlyFragmentTests,
+		vk::PipelineStageFlagBits::eEarlyFragmentTests);
 
-    vk::DependencyInfo dependency{};
-    dependency.setImageMemoryBarriers(depthBarrier);
-    m_CommandBuffers[imageIndex]->pipelineBarrier2(dependency);
 }
 
 void VulkanWindow::GBufferPass(uint32_t imageIndex, int width, int height) {
@@ -567,25 +563,29 @@ void VulkanWindow::GBufferPass(uint32_t imageIndex, int width, int height) {
 }
 
 void VulkanWindow::PrepareGBufferForRead(uint32_t imageIndex) {
-    std::array<vk::ImageMemoryBarrier2, 3> barriers;
-    auto setupBarrier = [](vk::Image image, vk::ImageMemoryBarrier2& barrier) {
-        barrier.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
-        barrier.srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;
-        barrier.dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
-        barrier.dstAccessMask = vk::AccessFlagBits2::eColorAttachmentRead;
-        barrier.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
-        barrier.newLayout = vk::ImageLayout::eReadOnlyOptimal;
-        barrier.image = image;
-        barrier.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-    };
+	ImageFactory::ShiftImageLayout(*m_CommandBuffers[imageIndex],
+			m_GBufferDiffuse,
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::AccessFlagBits::eColorAttachmentWrite,
+			vk::AccessFlagBits::eShaderRead,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput,
+			vk::PipelineStageFlagBits::eFragmentShader);
 
-    setupBarrier(m_GBufferDiffuse.image, barriers[0]);
-    setupBarrier(m_GBufferNormals.image, barriers[1]);
-    setupBarrier(m_GBufferMaterial.image, barriers[2]);
+	ImageFactory::ShiftImageLayout(*m_CommandBuffers[imageIndex],
+		m_GBufferNormals,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::AccessFlagBits::eColorAttachmentWrite,
+		vk::AccessFlagBits::eShaderRead,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput,
+		vk::PipelineStageFlagBits::eFragmentShader);
 
-    vk::DependencyInfo dep{};
-    dep.setImageMemoryBarriers(barriers);
-    m_CommandBuffers[imageIndex]->pipelineBarrier2(dep);
+	ImageFactory::ShiftImageLayout(*m_CommandBuffers[imageIndex],
+		m_GBufferMaterial,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::AccessFlagBits::eColorAttachmentWrite,
+		vk::AccessFlagBits::eShaderRead,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput,
+		vk::PipelineStageFlagBits::eFragmentShader);
 }
 
 void VulkanWindow::FinalColorPass(uint32_t imageIndex, int width, int height) const {
@@ -599,17 +599,10 @@ void VulkanWindow::FinalColorPass(uint32_t imageIndex, int width, int height) co
     colorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
     colorAttachment.setClearValue(vk::ClearValue({0.5f, 0.0f, 0.25f, 1.0f}));
 
-    vk::RenderingAttachmentInfo depthAttachment{};
-    depthAttachment.setImageView(m_DepthImageView);
-    depthAttachment.setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal);
-    depthAttachment.setLoadOp(vk::AttachmentLoadOp::eLoad);
-    depthAttachment.setStoreOp(vk::AttachmentStoreOp::eDontCare);
-
     vk::RenderingInfo renderInfo{};
     renderInfo.setRenderArea(scissor);
     renderInfo.setLayerCount(1);
     renderInfo.setColorAttachments(colorAttachment);
-    renderInfo.setPDepthAttachment(&depthAttachment);
 
     auto rawDescriptorSets = GetDescriptorSets(imageIndex);
 
@@ -731,30 +724,21 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(MVP);
 
-
-
 	vk::DescriptorImageInfo DiffuseImageInfo{};
-	DiffuseImageInfo.imageLayout = m_GBufferDiffuse.imageLayout;
+	DiffuseImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
 	DiffuseImageInfo.imageView = m_GBufferDiffuseView;
 	DiffuseImageInfo.sampler = nullptr;
 
 	vk::DescriptorImageInfo NormalImageInfo{};
-	DiffuseImageInfo.imageLayout = m_GBufferNormals.imageLayout;
-	DiffuseImageInfo.imageView = m_GBufferNormalsView;
-	DiffuseImageInfo.sampler = nullptr;
+	NormalImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+	NormalImageInfo.imageView = m_GBufferNormalsView;
+	NormalImageInfo.sampler = nullptr;
 
 	vk::DescriptorImageInfo MaterialImageInfo{};
-	DiffuseImageInfo.imageLayout = m_GBufferMaterial.imageLayout;
-	DiffuseImageInfo.imageView = m_GBufferMaterialView;
-	DiffuseImageInfo.sampler = nullptr;
+	MaterialImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+	MaterialImageInfo.imageView = m_GBufferMaterialView;
+	MaterialImageInfo.sampler = nullptr;
 
-
-	std::vector<vk::DescriptorImageInfo> TextureImageInfos
-	{
-		DiffuseImageInfo,
-		NormalImageInfo,
-		MaterialImageInfo
-	};
 
 	for (auto& ds : *m_FrameDescriptorSets) {
 		vk::WriteDescriptorSet writeInfo{};
@@ -765,15 +749,32 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 		writeInfo.pImageInfo      = nullptr;
 		writeInfo.pBufferInfo     = &bufferInfo;
 
-		vk::WriteDescriptorSet textureWD{};
-		textureWD.dstSet = ds;
-		textureWD.descriptorType = vk::DescriptorType::eSampledImage;
-		textureWD.descriptorCount = static_cast<uint32_t>(3);
-		textureWD.pImageInfo      = TextureImageInfos.data();
-		textureWD.pBufferInfo     = nullptr;
+		vk::WriteDescriptorSet textureDiffuse{};
+		textureDiffuse.dstSet = ds;
+		textureDiffuse.descriptorType = vk::DescriptorType::eSampledImage;
+		textureDiffuse.descriptorCount = static_cast<uint32_t>(1);
+		textureDiffuse.pImageInfo      = &DiffuseImageInfo;
+		textureDiffuse.dstBinding	  = 1;
+		textureDiffuse.pBufferInfo     = nullptr;
 
-		m_Device->updateDescriptorSets(writeInfo, nullptr);
-		m_Device->updateDescriptorSets(textureWD, nullptr);
+		vk::WriteDescriptorSet textureNormal{};
+		textureNormal.dstSet = ds;
+		textureNormal.descriptorType = vk::DescriptorType::eSampledImage;
+		textureNormal.descriptorCount = static_cast<uint32_t>(1);
+		textureNormal.pImageInfo      = &NormalImageInfo;
+		textureNormal.dstBinding	  = 2;
+		textureNormal.pBufferInfo     = nullptr;
+
+		vk::WriteDescriptorSet textureMaterial{};
+		textureMaterial.dstSet = ds;
+		textureMaterial.descriptorType = vk::DescriptorType::eSampledImage;
+		textureMaterial.descriptorCount = static_cast<uint32_t>(1);
+		textureMaterial.pImageInfo      = &MaterialImageInfo;
+		textureMaterial.dstBinding	  = 3;
+		textureMaterial.pBufferInfo     = nullptr;
+
+
+		m_Device->updateDescriptorSets({writeInfo,textureDiffuse,textureNormal,textureMaterial}, nullptr);
 
 
 	}
@@ -965,7 +966,7 @@ void VulkanWindow::CreateGraphicsPipeline() {
 
 	// depth stencil
 	vk::PipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthTestEnable = VK_FALSE;
 	depthStencil.depthWriteEnable = VK_FALSE;
 	depthStencil.depthCompareOp = vk::CompareOp::eEqual;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
@@ -989,7 +990,7 @@ void VulkanWindow::CreateGraphicsPipeline() {
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = vk::PolygonMode::eFill;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+	rasterizer.cullMode = vk::CullModeFlagBits::eNone;
 	rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1000,14 +1001,9 @@ void VulkanWindow::CreateGraphicsPipeline() {
 
 	// vertex input info
 	vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
 	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
+	vertexInputInfo.vertexBindingDescriptionCount = 0;
 
 	uint32_t textureCount = static_cast<uint32_t>(m_ImageResource.size());
 
@@ -1065,11 +1061,10 @@ void VulkanWindow::CreateGraphicsPipeline() {
 void VulkanWindow::CreateGBufferPipeline() {
     vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = vk::CompareOp::eLess;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = vk::CompareOp::eEqual;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
-
 
 	std::vector<vk::PipelineColorBlendAttachmentState> blendAttachments(3);
 	for (auto& blend : blendAttachments) {
@@ -1134,7 +1129,7 @@ void VulkanWindow::CreateGBufferPipeline() {
 
     std::vector<vk::Format> gbufferFormats = {
         vk::Format::eR8G8B8A8Srgb,   // Diffuse
-        vk::Format::eR8G8B8A8Unorm,  // Normals
+        vk::Format::eR8G8B8A8Snorm,  // Normals
         vk::Format::eR8G8B8A8Srgb    // Material
     };
 
@@ -1198,7 +1193,7 @@ void VulkanWindow::CreateGBuffer() {
         imageInfo.extent = extent;
         imageInfo.mipLevels = 1;
         imageInfo.arrayLayers = 1;
-        imageInfo.format = vk::Format::eR8G8B8A8Unorm;
+        imageInfo.format = vk::Format::eR8G8B8A8Snorm;
         imageInfo.tiling = vk::ImageTiling::eOptimal;
         imageInfo.initialLayout = vk::ImageLayout::eUndefined;
         imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
@@ -1237,7 +1232,7 @@ void VulkanWindow::CreateGBuffer() {
     }
 
 	m_GBufferDiffuseView = ImageFactory::CreateImageView(*m_Device, m_GBufferDiffuse.image, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, m_AllocationTracker.get(), "GBufferDiffuseView");
-	m_GBufferNormalsView = ImageFactory::CreateImageView(*m_Device, m_GBufferNormals.image, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor, m_AllocationTracker.get(), "GBufferNormalsView");
+	m_GBufferNormalsView = ImageFactory::CreateImageView(*m_Device, m_GBufferNormals.image, vk::Format::eR8G8B8A8Snorm, vk::ImageAspectFlagBits::eColor, m_AllocationTracker.get(), "GBufferNormalsView");
 	m_GBufferMaterialView = ImageFactory::CreateImageView(*m_Device, m_GBufferMaterial.image, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, m_AllocationTracker.get(), "GBufferMaterialView");
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator Alloc) {

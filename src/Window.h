@@ -71,6 +71,8 @@ private:
 
 	void TransitionInitialLayouts(uint32_t imageIndex);
 
+	void DepthPrepass(uint32_t imageIndex, int width, int height);
+
 	void DepthPrepass(uint32_t imageIndex, int width, int height) const;
 
 	void GBufferPass(uint32_t imageIndex, int width, int height);

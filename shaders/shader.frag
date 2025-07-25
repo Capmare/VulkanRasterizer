@@ -16,14 +16,6 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 0) uniform sampler texSampler;
 layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
 
-layout(push_constant) uniform constants {
-    uint Diffuse;
-    uint Normal;
-    uint Metallic;
-    uint Roughness;
-    uint AO;
-    uint Emmisive;
-} material;
 
 layout(set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
@@ -33,6 +25,11 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 proj;
     vec3 cameraPos;
 } ubo;
+
+layout(set = 0, binding = 1) uniform texture2D Diffuse;
+layout(set = 0, binding = 2) uniform texture2D Normal;
+layout(set = 0, binding = 3) uniform texture2D Material;
+
 
 // Point light
 const vec3 pointLightPos = vec3(5.f, -5.f, 0.0);
@@ -45,12 +42,11 @@ const vec3 dirLightColor     = vec3(1.0, 0.96, 0.9);
 const float dirLightIntensity = 2.5;
 
 vec3 sampleNormal() {
-    vec3 normalColor = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), fragTexCoord).xyz;
+    vec3 normalColor = texture(sampler2D(Normal, texSampler), fragTexCoord).xyz;
     normalColor.g = 1.0 - normalColor.g; // Flip Y channel
     normalColor = normalColor * 2.0 - 1.0;
     return normalize(normalColor);
 }
-
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -84,9 +80,6 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-
-
-
 #ifdef CAMERA_PRESET_SUNNY16
     const float aperture     = 5.0f;
     const float ISO          = 100.0f;
@@ -98,8 +91,6 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     const float ISO          = 1600.0f;
     const float shutterSpeed = 1.0f / 60.0f;
 #endif
-
-
 
 vec3 Uncharted2ToneMappingCurve(in vec3 x) {
     const float A = 0.15;
@@ -122,11 +113,12 @@ vec3 Uncharted2ToneMapping(in vec3 color) {
 
 
 void main() {
-    vec3 albedo = texture(sampler2D(textures[nonuniformEXT(material.Diffuse)], texSampler), fragTexCoord).rgb;
-    float metallic = texture(sampler2D(textures[nonuniformEXT(material.Metallic)], texSampler), fragTexCoord).b;
-    float roughness = texture(sampler2D(textures[nonuniformEXT(material.Roughness)], texSampler), fragTexCoord).g;
+    vec3 albedo = texture(sampler2D(Diffuse, texSampler), fragTexCoord).rgb;
+    float metallic = texture(sampler2D(Material, texSampler), fragTexCoord).r;
+    float roughness = texture(sampler2D(Material, texSampler), fragTexCoord).g;
 
     vec3 N = sampleNormal();
+
     vec3 V = normalize(ubo.cameraPos - fragWorldPos);
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
@@ -144,9 +136,11 @@ void main() {
     float G_p = GeometrySmith(N, V, Lp, roughness);
     vec3 F_p = fresnelSchlick(max(dot(Hp, V), 0.0), F0);
 
+
     vec3 kS_p = F_p;
     vec3 kD_p = vec3(1.0) - kS_p;
     kD_p *= 1.0 - metallic;
+
 
     vec3 numerator_p = NDF_p * G_p * F_p;
     float denominator_p = 4.0 * max(dot(N, V), 0.0) * max(dot(N, Lp), 0.0) + 0.0001;
@@ -175,7 +169,6 @@ void main() {
     float NDotLd = max(dot(N, Ld), 0.0);
     Lo += (kD_d * albedo / 3.1415 + specular_d) * radiance_d * NDotLd;
 
-
     vec3 ambient = vec3(0.03) * albedo;
 
     // Combine all lighting
@@ -189,7 +182,7 @@ void main() {
     color = Uncharted2ToneMapping(color);
     color = pow(color, vec3(1.0 / 2.2));
 
-    outColor = vec4(color, 1.0);
+    outColor = vec4(N, 1.0);
 
     // Debug outputs
     // outColor = vec4(N * 0.5 + 0.5, 1.0);        // Normal visualization
