@@ -37,12 +37,12 @@ add_dependencies(${PROJECT_NAME} compileShaders)
 
 # === COPY TEXTURES ===
 add_custom_command(POST_BUILD TARGET ${PROJECT_NAME}
-   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+   COMMAND ${CMAKE_COMMAND} -E copy_directory
    ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders)
 
 # === COPY MODELS ===
 add_custom_command(POST_BUILD TARGET ${PROJECT_NAME}
-   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+   COMMAND ${CMAKE_COMMAND} -E copy_directory
    ${CMAKE_SOURCE_DIR}/models $<TARGET_FILE_DIR:${PROJECT_NAME}>/models)
 
 # === INCLUDE PATHS ===
