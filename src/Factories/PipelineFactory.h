@@ -13,10 +13,10 @@ public:
     PipelineFactory& SetInputAssembly(const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly);
     PipelineFactory& SetRasterizer(const vk::PipelineRasterizationStateCreateInfo& rasterizer);
     PipelineFactory& SetMultisampling(const vk::PipelineMultisampleStateCreateInfo& multisampling);
-    PipelineFactory& SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment);
+    PipelineFactory& SetColorBlendAttachments(const std::vector<vk::PipelineColorBlendAttachmentState> &attachment);
     PipelineFactory& SetDynamicStates(const std::vector<vk::DynamicState>& dynamicStates);
     PipelineFactory& SetLayout(vk::raii::PipelineLayout& layout);
-    PipelineFactory& SetColorFormat(vk::Format colorFormat);
+    PipelineFactory& SetColorFormats(const std::vector<vk::Format> &colorFormats);
     PipelineFactory& SetDepthFormat(vk::Format depthFormat);
     PipelineFactory& SetDepthStencil(const vk::PipelineDepthStencilStateCreateInfo& depthStencil);
     PipelineFactory& SetViewportState(const vk::PipelineViewportStateCreateInfo& viewportState);
@@ -31,14 +31,14 @@ private:
     vk::PipelineInputAssemblyStateCreateInfo m_InputAssembly{};
     vk::PipelineRasterizationStateCreateInfo m_Rasterizer{};
     vk::PipelineMultisampleStateCreateInfo m_Multisampling{};
-    vk::PipelineColorBlendAttachmentState m_ColorBlendAttachment{};
+    std::vector<vk::PipelineColorBlendAttachmentState> m_ColorBlendAttachment{};
     std::vector<vk::DynamicState> m_DynamicStates;
     vk::PipelineDynamicStateCreateInfo m_DynamicStateInfo{};
     vk::PipelineColorBlendStateCreateInfo m_ColorBlending{};
     vk::PipelineViewportStateCreateInfo m_ViewportState{};
     vk::PipelineDepthStencilStateCreateInfo m_DepthStencil{};
     vk::raii::PipelineLayout* m_PipelineLayout = nullptr;
-    vk::Format m_ColorFormat{};
+    std::vector<vk::Format> m_ColorFormat{};
     vk::Format m_DepthFormat{};
 };
 

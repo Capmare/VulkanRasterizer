@@ -351,34 +351,48 @@ void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk:
     Image.image = img;
 }
 
-void ImageFactory::ShiftImageLayout(const vk::CommandBuffer &commandBuffer, ImageResource& image,
-                                    vk::ImageLayout newLayout, vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
-                                    vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
+void ImageFactory::ShiftImageLayout(
+    const vk::CommandBuffer& commandBuffer,
+    ImageResource& image,
+    vk::ImageLayout newLayout,
+    vk::AccessFlags srcAccessMask,
+    vk::AccessFlags dstAccessMask,
+    vk::PipelineStageFlags srcStage,
+    vk::PipelineStageFlags dstStage)
+{
+    // Fallback aspect mask
+    vk::ImageAspectFlags aspectFlags = image.imageAspectFlags;
 
+    if (aspectFlags == vk::ImageAspectFlags{})
+    {
+        aspectFlags = vk::ImageAspectFlagBits::eColor;
+    }
 
-    vk::ImageSubresourceRange access;
-    access.aspectMask = image.imageAspectFlags;
-    access.baseMipLevel = 0;
-    access.levelCount = 1;
-    access.baseArrayLayer = 0;
-    access.layerCount = 1;
+    vk::ImageSubresourceRange subresourceRange{};
+    subresourceRange.aspectMask = aspectFlags;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
 
-    vk::ImageMemoryBarrier barrier;
+    vk::ImageMemoryBarrier barrier{};
     barrier.oldLayout = image.imageLayout;
     barrier.newLayout = newLayout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image.image;
-    barrier.subresourceRange = access;
-
-    vk::PipelineStageFlags sourceStage, destinationStage;
-
+    barrier.subresourceRange = subresourceRange;
     barrier.srcAccessMask = srcAccessMask;
     barrier.dstAccessMask = dstAccessMask;
 
+    // Update stored layout
     image.imageLayout = newLayout;
-    
-    commandBuffer.pipelineBarrier(
-        srcStage, dstStage, vk::DependencyFlags(), nullptr, nullptr, barrier);
 
+    commandBuffer.pipelineBarrier(
+        srcStage,
+        dstStage,
+        vk::DependencyFlags(),
+        nullptr,
+        nullptr,
+        barrier);
 }

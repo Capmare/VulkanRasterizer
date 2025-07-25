@@ -63,6 +63,36 @@ private:
 
 	void InitVulkan();
 
+	void PrepareFrame();
+
+	uint32_t AcquireSwapchainImage() const;
+
+	void BeginCommandBuffer(uint32_t imageIndex) const;
+
+	void TransitionInitialLayouts(uint32_t imageIndex);
+
+	void DepthPrepass(uint32_t imageIndex, int width, int height) const;
+
+	void GBufferPass(uint32_t imageIndex, int width, int height);
+
+	void GBufferPass(uint32_t imageIndex, int width, int height) const;
+
+	void PrepareGBufferForRead(uint32_t imageIndex);
+
+	void FinalColorPass(uint32_t imageIndex, int width, int height) const;
+
+	void TransitionForPresentation(uint32_t imageIndex);
+
+	void EndCommandBuffer(uint32_t imageIndex) const;
+
+	void SubmitFrame(uint32_t imageIndex) const;
+
+	void PresentFrame(uint32_t imageIndex) const;
+
+	std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t imageIndex) const;
+
+	void DrawMeshes(uint32_t imageIndex) const;
+
 	void CreateSemaphoreAndFences();
 
 	void LoadMesh();
@@ -81,9 +111,16 @@ private:
 
 	void CreateGraphicsPipeline();
 
+	void CreateGBufferPipeline();
+
+	void CreateGBuffer();
+
+
 	void CreateCommandBuffers();
 
 	void DrawFrame();
+
+	void HandleFramebufferResize(int width, int height);
 
 	void MainLoop();
 
@@ -107,8 +144,11 @@ private:
 	std::unique_ptr<LogicalDeviceFactory> m_LogicalDeviceFactory{};
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
+
 	std::unique_ptr<PipelineFactory> m_GraphicsPipelineFactory{};
 	std::unique_ptr<PipelineFactory> m_DepthPipelineFactory{};
+	std::unique_ptr<PipelineFactory> m_GBufferPipelineFactory{};
+
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
 	std::unique_ptr<DepthImageFactory> m_DepthImageFactory{};
 
@@ -118,8 +158,11 @@ private:
 	std::unique_ptr<vk::raii::Device> m_Device{};
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
+
+
 	std::unique_ptr<vk::raii::Pipeline> m_GraphicsPipeline{};
 	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
+	std::unique_ptr<vk::raii::Pipeline> m_GBufferPipeline{};
 
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore{};
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore{};
@@ -136,6 +179,7 @@ private:
 	std::vector<vk::ShaderEXT> rawShaders{};
 	std::vector<vk::raii::ShaderModule> m_ShaderModules{};
 	std::vector<vk::raii::ShaderModule> m_DepthShaderModules{};
+	std::vector<vk::raii::ShaderModule> m_GBufferShaderModules{};
 
 	std::unique_ptr<vk::raii::Sampler> m_Sampler{};
 
@@ -158,6 +202,14 @@ private:
 	std::unique_ptr<MeshFactory> m_MeshFactory{};
 	std::vector<ImageResource> m_ImageResource{};
 
+	// G-buffer images
+	ImageResource m_GBufferDiffuse;
+	ImageResource m_GBufferNormals;
+	ImageResource m_GBufferMaterial;
+
+	VkImageView m_GBufferDiffuseView{};
+	VkImageView m_GBufferNormalsView{};
+	VkImageView m_GBufferMaterialView{};
 
 	BufferInfo m_UniformBufferInfo{};
 

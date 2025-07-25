@@ -29,12 +29,12 @@ PipelineFactory& PipelineFactory::SetMultisampling(const vk::PipelineMultisample
     return *this;
 }
 
-PipelineFactory& PipelineFactory::SetColorBlendAttachment(const vk::PipelineColorBlendAttachmentState& attachment) {
+PipelineFactory& PipelineFactory::SetColorBlendAttachments(const std::vector<vk::PipelineColorBlendAttachmentState> &attachment) {
     m_ColorBlendAttachment = attachment;
     m_ColorBlending = vk::PipelineColorBlendStateCreateInfo{}
         .setLogicOpEnable(false)
-        .setAttachmentCount(1)
-        .setPAttachments(&m_ColorBlendAttachment);
+        .setAttachmentCount(attachment.size())
+        .setPAttachments(m_ColorBlendAttachment.data());
     return *this;
 }
 
@@ -50,8 +50,8 @@ PipelineFactory& PipelineFactory::SetLayout(vk::raii::PipelineLayout& layout) {
     return *this;
 }
 
-PipelineFactory& PipelineFactory::SetColorFormat(vk::Format colorFormat) {
-    m_ColorFormat = colorFormat;
+PipelineFactory& PipelineFactory::SetColorFormats(const std::vector<vk::Format> &colorFormats) {
+    m_ColorFormat = colorFormats;
     return *this;
 }
 
@@ -74,8 +74,8 @@ PipelineFactory & PipelineFactory::SetViewportState(
 
 vk::raii::Pipeline PipelineFactory::Build() {
     vk::PipelineRenderingCreateInfoKHR renderingInfo{};
-    renderingInfo.setColorAttachmentCount(1);
-    renderingInfo.setPColorAttachmentFormats(&m_ColorFormat);
+    renderingInfo.setColorAttachmentCount(m_ColorFormat.size());
+    renderingInfo.setPColorAttachmentFormats(m_ColorFormat.data());
     renderingInfo.setDepthAttachmentFormat(m_DepthFormat);
 
     vk::GraphicsPipelineCreateInfo pipelineInfo{};
