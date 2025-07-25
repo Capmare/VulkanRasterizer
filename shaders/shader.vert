@@ -3,6 +3,8 @@
 
 layout(location = 1) out vec2 fragTexCoord;
 
+
+
 void main()
 {
         fragTexCoord = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);

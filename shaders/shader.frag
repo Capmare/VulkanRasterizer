@@ -10,6 +10,8 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragWorldPos;
 layout(location = 3) in vec3 fragNormal;
+layout(location = 4) in vec3 fragTangent;
+layout(location = 5) in vec3 fragBitangent;
 
 layout(location = 0) out vec4 outColor;
 
@@ -117,7 +119,14 @@ void main() {
     float metallic = texture(sampler2D(Material, texSampler), fragTexCoord).r;
     float roughness = texture(sampler2D(Material, texSampler), fragTexCoord).g;
 
-    vec3 N = sampleNormal();
+    mat3 TBN = mat3(
+    normalize(fragTangent),
+    normalize(fragBitangent),
+    normalize(fragNormal)
+    );
+
+    vec3 normalMap = sampleNormal();
+    vec3 N = normalize(TBN * normalMap);
 
     vec3 V = normalize(ubo.cameraPos - fragWorldPos);
     vec3 F0 = vec3(0.04);
@@ -140,7 +149,6 @@ void main() {
     vec3 kS_p = F_p;
     vec3 kD_p = vec3(1.0) - kS_p;
     kD_p *= 1.0 - metallic;
-
 
     vec3 numerator_p = NDF_p * G_p * F_p;
     float denominator_p = 4.0 * max(dot(N, V), 0.0) * max(dot(N, Lp), 0.0) + 0.0001;
@@ -182,7 +190,7 @@ void main() {
     color = Uncharted2ToneMapping(color);
     color = pow(color, vec3(1.0 / 2.2));
 
-    outColor = vec4(N, 1.0);
+    outColor = vec4(color, 1.0);
 
     // Debug outputs
     // outColor = vec4(N * 0.5 + 0.5, 1.0);        // Normal visualization

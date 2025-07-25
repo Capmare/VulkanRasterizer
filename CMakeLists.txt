@@ -24,9 +24,6 @@ add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
 # === SHADER COMPILATION USING .BAT ===
 add_custom_target(compileShaders ALL
-        COMMAND ${CMAKE_COMMAND} -E echo "Cleaning old SPIR-V files..."
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${SHADER_OUTPUT_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUTPUT_DIR}"
         COMMAND ${CMAKE_COMMAND} -E echo "Running compile.bat..."
         COMMAND ${CMAKE_COMMAND} -E chdir "${SHADER_DIR}" compile.bat
         COMMENT "Compiling shaders via compile.bat"

@@ -59,6 +59,8 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                     vert.texCoord = glm::vec2(0.0f);
                 }
                 vert.normal = glm::vec3(ai_mesh->mNormals->x, ai_mesh->mNormals->y, ai_mesh->mNormals->z);
+                vert.bitangent = glm::vec3(ai_mesh->mBitangents->x,ai_mesh->mBitangents->y,ai_mesh->mBitangents->z);
+                vert.tangent = glm::vec3(ai_mesh->mTangents->x,ai_mesh->mTangents->y,ai_mesh->mTangents->z);
 
                 vertices.push_back(vert);
             }
