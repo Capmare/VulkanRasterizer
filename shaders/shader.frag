@@ -18,9 +18,7 @@ layout(std140, binding = 0) uniform UBO {
     mat4 view;
     mat4 proj;
     vec3 cameraPos;
-    float _pad;
-    vec2 screenSize;
-    vec2 _pad2;
+
 } ubo;
 
 layout(set = 0, binding = 1) uniform texture2D Diffuse;

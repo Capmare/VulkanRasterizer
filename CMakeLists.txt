@@ -21,7 +21,7 @@ set(SHADER_DIR "${CMAKE_SOURCE_DIR}/shaders")
 set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/compiled_shaders")
 file(MAKE_DIRECTORY "${SHADER_OUTPUT_DIR}")
 
-# === Compile shaders if source changed ===
+# === Compile shaders ===
 file(GLOB SHADER_SOURCES "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag")
 set(COMPILED_SHADERS "")
 
@@ -43,13 +43,15 @@ foreach(SHADER_FILE ${SHADER_SOURCES})
     list(APPEND COMPILED_SHADERS ${SPIRV_FILE})
 endforeach()
 
-add_custom_target(compileShaders
+# Always compile shaders before building the app
+add_custom_target(compileShaders ALL
         DEPENDS ${COMPILED_SHADERS}
         COMMENT "Compiling shaders if changed"
 )
 
-# === Copy compiled shaders to runtime folder ===
-add_custom_target(copyCompiledShaders ALL
+# === Copy compiled shaders after they're compiled ===
+add_custom_target(copyCompiledShaders
+        DEPENDS compileShaders
         COMMAND ${CMAKE_COMMAND} -E echo "Cleaning old shaders..."
         COMMAND ${CMAKE_COMMAND} -E remove_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
@@ -112,6 +114,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(VMA)
 target_include_directories(${PROJECT_NAME} PRIVATE ${vma_SOURCE_DIR}/include)
 
-# Vulkan
+# === Vulkan ===
 find_package(Vulkan REQUIRED)
 target_link_libraries(${PROJECT_NAME} Vulkan::Vulkan)

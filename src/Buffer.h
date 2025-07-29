@@ -3,7 +3,7 @@
 
 #define VULKAN_HPP_NO_EXCEPTIONS
 #include <vulkan/vulkan.hpp>
-#include <vk_mem_alloc.h>
+#include <vma/vk_mem_alloc.h>
 #include <cstring>
 
 #include "vulkan/vulkan_raii.hpp"

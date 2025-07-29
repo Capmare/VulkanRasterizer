@@ -101,7 +101,6 @@ void VulkanWindow::UpdateUBO() {
 	float aspectRatio = static_cast<float>(m_CurrentScreenSize.x) / m_CurrentScreenSize.y;
     ubo.proj = m_Camera->GetProjectionMatrix(aspectRatio);
 	ubo.cameraPos = m_Camera->position;
-	ubo.screenSize = m_CurrentScreenSize;
 
     Buffer::UploadData(m_UniformBufferInfo, &ubo, sizeof(ubo));
 

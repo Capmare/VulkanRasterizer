@@ -17,16 +17,11 @@
 #include "vulkan/vulkan_raii.hpp"
 
 
-struct MVP {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-
-    glm::vec3 cameraPos;
-    float _pad0 = 0.0f;          // padding to align next item
-
-    glm::vec2 screenSize;
-    glm::vec2 _pad1 = glm::vec2(0.0f); // padding to 16 bytes
+struct alignas(16)  MVP {
+   alignas(16) glm::mat4 model;
+   alignas(16) glm::mat4 view;
+   alignas(16) glm::mat4 proj;
+   alignas(16) glm::vec3 cameraPos;
 };
 
 struct Material {

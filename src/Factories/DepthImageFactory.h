@@ -2,7 +2,7 @@
 #define DEPTHIMAGEFACTORY_H
 
 #include <vulkan/vulkan_raii.hpp>
-#include <vk_mem_alloc.h>
+#include <vma/vk_mem_alloc.h>
 #include <deque>
 #include <functional>
 
