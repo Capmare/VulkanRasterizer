@@ -29,7 +29,7 @@ layout(set = 0, binding = 3) uniform texture2D Material;
 layout(set = 0, binding = 4) uniform texture2D Depth;
 
 // Point light (world space)
-const vec3 pointLightPos = vec3(5.0, -5.0, 3);
+const vec3 pointLightPos = vec3(0, 3, 0);
 const vec3 pointLightColor = vec3(1.0, 0.3, 0.3);
 const float pointLightIntensity = 10.0;
 

@@ -236,21 +236,16 @@ private:
 
 	std::unique_ptr<Camera> m_Camera{};
 
-	glm::vec3 cameraPos = glm::vec3(20.f, 0.f, 0.f);
-	glm::vec3 cameraFront = glm::vec3(-1.f, 0.f, 0.f);
-	glm::vec3 cameraUp = glm::vec3(0.f, 1.f, 0.f);
-	glm::vec3 cameraRight = glm::vec3(0.f, 0.f, 1.f);
 
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
 
 	double lastX = 400, lastY = 300;
 	bool firstMouse = true;
-	float yaw = -90.0f;  // facing -Z
-	float pitch = 0.0f;
 
 
-	glm::vec3 spawnPosition = glm::vec3(10.0f, -5.0f, 0.0f);
+
+	glm::vec3 spawnPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	size_t m_FramesInFlight{ 2 };
 	uint32_t m_CurrentFrame{ 0 };

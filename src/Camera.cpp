@@ -5,7 +5,7 @@
 #include "Camera.h"
 
 glm::mat4 Camera::GetViewMatrix() const {
-    return glm::lookAt(position, target, up);
+    return glm::lookAt(position, position + target, up);
 }
 
 glm::mat4 Camera::GetProjectionMatrix(float aspectRatio) const {

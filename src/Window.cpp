@@ -97,7 +97,7 @@ void VulkanWindow::UpdateUBO() {
 	MVP ubo{};
 
     ubo.model = glm::translate(glm::mat4(1.0f), spawnPosition);
-	ubo.view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	ubo.view = m_Camera->GetViewMatrix();
 	float aspectRatio = static_cast<float>(m_CurrentScreenSize.x) / m_CurrentScreenSize.y;
     ubo.proj = m_Camera->GetProjectionMatrix(aspectRatio);
 	ubo.cameraPos = m_Camera->position;
@@ -148,7 +148,7 @@ void VulkanWindow::mouse_callback(double xpos, double ypos) {
 	}
 
 	float xoffset = static_cast<float>(xpos - lastX);
-	float yoffset = static_cast<float>(lastY - ypos);  // reversed y
+	float yoffset = static_cast<float>(lastY - ypos); // reversed
 
 	lastX = xpos;
 	lastY = ypos;
@@ -157,46 +157,41 @@ void VulkanWindow::mouse_callback(double xpos, double ypos) {
 	xoffset *= sensitivity;
 	yoffset *= sensitivity;
 
-	yaw += xoffset;
-	pitch += yoffset;
+	m_Camera->yaw += xoffset;
+	m_Camera->pitch += yoffset;
 
-	if (pitch > 89.0f) pitch = 89.0f;
-	if (pitch < -89.0f) pitch = -89.0f;
-
-	glm::vec3 front;
-	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	front.y = sin(glm::radians(pitch));
-	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	cameraFront = glm::normalize(front);
+	m_Camera->pitch = glm::clamp(m_Camera->pitch, -89.0f, 89.0f);
+	m_Camera->UpdateTarget();
 }
 
 
 void VulkanWindow::ProcessInput(GLFWwindow* window, float deltaTime) {
 	float velocity = cameraSpeed * deltaTime;
 
+	glm::vec3 front = glm::normalize(m_Camera->target);
+	glm::vec3 right = glm::normalize(glm::cross(front, m_Camera->up));
+	glm::vec3 up = m_Camera->up;
 
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		cameraPos += cameraFront * velocity;
+		m_Camera->position += front * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		cameraPos -= cameraFront * velocity;
+		m_Camera->position -= front * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
-		cameraPos -= right * velocity;
+		m_Camera->position -= right * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
-		cameraPos += right * velocity;
+		m_Camera->position += right * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-		cameraPos += cameraUp * velocity;
+		m_Camera->position += up * velocity;
 	}
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-		cameraPos -= cameraUp * velocity;
+		m_Camera->position -= up * velocity;
 	}
 
 }

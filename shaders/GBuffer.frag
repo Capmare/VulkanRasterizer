@@ -68,7 +68,7 @@ void main() {
 
 
     outAlbedo   = vec4(albedo, 1.0);
-    outNormal = vec4(worldNormal * 0.5 + 0.5, 1.0);
+    outNormal = vec4(worldNormal, 1.0);
     outMaterial = vec4(metallic, roughness, ao, 1.0);
 
 
