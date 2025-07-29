@@ -29,7 +29,7 @@ layout(set = 0, binding = 3) uniform texture2D Material;
 layout(set = 0, binding = 4) uniform texture2D Depth;
 
 // Point light (world space)
-const vec3 pointLightPos = vec3(5.0, -5.0, 0.0);
+const vec3 pointLightPos = vec3(5.0, -5.0, 3);
 const vec3 pointLightColor = vec3(1.0, 0.3, 0.3);
 const float pointLightIntensity = 10.0;
 
@@ -69,25 +69,26 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 }
 
 // Reconstruct position from depth in view space
-vec3 reconstructViewPos(float depth, ivec2 fragCoords, ivec2 resolution, mat4 invProj) {
-    vec2 ndc = vec2(
-        (float(fragCoords.x) / resolution.x) * 2.0 - 1.0,
-        (float(fragCoords.y) / resolution.y) * 2.0 - 1.0
-    );
-    ndc.y *= -1.0;
-    vec4 clip = vec4(ndc, depth, 1.0);
-    vec4 view = invProj * clip;
-    view /= view.w;
-    return view.xyz;
+vec3 reconstructWorldPos(float depth, mat4 invProj) {
+    float z = depth * 2.0 - 1.0;
+
+    vec4 clipSpacePosition = vec4(inTexCoord * 2.0 - 1.0, z, 1.0);
+    vec4 viewSpacePosition = invProj * clipSpacePosition;
+
+    // Perspective division
+    viewSpacePosition /= viewSpacePosition.w;
+
+    vec4 worldSpacePosition = invProj * viewSpacePosition;
+
+    return worldSpacePosition.xyz;
 }
 
 void main() {
     float depth = texelFetch(sampler2D(Depth, texSampler), ivec2(gl_FragCoord.xy), 0).r;
 
     // Reconstruct view-space position
-    vec3 viewPos = reconstructViewPos(depth, ivec2(gl_FragCoord.xy), ivec2(ubo.screenSize), inverse(ubo.proj));
-    vec4 worldPos4 = inverse(ubo.view) * vec4(viewPos, 1.0);
-    vec3 worldPos = worldPos4.xyz / worldPos4.w;
+    vec3 worldPos = reconstructWorldPos(depth, inverse(ubo.proj));
+
 
     vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
@@ -128,7 +129,7 @@ void main() {
     color = pow(color, vec3(1.0 / 2.2));
 
     // Debug light vector
-    outColor = vec4(NDF,NDF,NDF, 1.0);
+    outColor = vec4(color, 1.0);
 
     //outColor = vec4(normalize(L) * 0.5 + 0.5, 1.0); // visualize L direction
 
