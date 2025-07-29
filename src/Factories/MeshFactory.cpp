@@ -189,7 +189,7 @@ Mesh MeshFactory::Build_Mesh(
 
 
 int MeshFactory::LoadTextureGeneric(
-    const aiScene* scene,
+    const aiScene* ,
     const std::string& texPathStr,
     const std::filesystem::path& baseDir,
     std::unordered_map<std::string, uint32_t>& textureCache,

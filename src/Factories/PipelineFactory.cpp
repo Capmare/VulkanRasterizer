@@ -33,7 +33,7 @@ PipelineFactory& PipelineFactory::SetColorBlendAttachments(const std::vector<vk:
     m_ColorBlendAttachment = attachment;
     m_ColorBlending = vk::PipelineColorBlendStateCreateInfo{}
         .setLogicOpEnable(false)
-        .setAttachmentCount(attachment.size())
+        .setAttachmentCount(static_cast<uint32_t>(attachment.size()))
         .setPAttachments(m_ColorBlendAttachment.data());
     return *this;
 }
@@ -74,7 +74,7 @@ PipelineFactory & PipelineFactory::SetViewportState(
 
 vk::raii::Pipeline PipelineFactory::Build() {
     vk::PipelineRenderingCreateInfoKHR renderingInfo{};
-    renderingInfo.setColorAttachmentCount(m_ColorFormat.size());
+    renderingInfo.setColorAttachmentCount(static_cast<uint32_t>(m_ColorFormat.size()));
     renderingInfo.setPColorAttachmentFormats(m_ColorFormat.data());
     renderingInfo.setDepthAttachmentFormat(m_DepthFormat);
 

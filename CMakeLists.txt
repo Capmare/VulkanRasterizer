@@ -109,8 +109,9 @@ target_link_libraries(${PROJECT_NAME} glm::glm-header-only)
 FetchContent_Declare(
         VMA
         GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-        GIT_TAG master
+        GIT_TAG v2.3.0
 )
+
 FetchContent_MakeAvailable(VMA)
 target_include_directories(${PROJECT_NAME} PRIVATE ${vma_SOURCE_DIR}/include)
 

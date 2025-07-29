@@ -28,8 +28,30 @@ layout(set = 0, binding = 4) uniform texture2D Depth;
 
 // Point light (world space)
 const vec3 pointLightPos = vec3(0, 1, 0);
-const vec3 pointLightColor = vec3(1.0, 0.3, 0.3);
-const float pointLightIntensity = 10.0;
+const vec3 pointLightColor = vec3(1.0, 1.0, 0.3);
+const float pointLightIntensity = 2.0;
+
+
+vec3 Uncharted2Tonemap(vec3 x) {
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+vec3 ToneMapUncharted2(vec3 color) {
+    float exposure = 2;
+    color *= exposure;
+
+    const float W = 11.2;
+    vec3 mapped = Uncharted2Tonemap(color);
+    vec3 whiteScale = 1.0 / Uncharted2Tonemap(vec3(W));
+    return mapped * whiteScale;
+}
+
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -123,7 +145,7 @@ void main() {
     vec3 color = ambient + Lo;
 
     // Gamma correction
-    color = color / (color + vec3(1.0));
+    color = ToneMapUncharted2(color);
     color = pow(color, vec3(1.0 / 2.2));
 
     // Debug light vector
