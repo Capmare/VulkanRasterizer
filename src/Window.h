@@ -12,6 +12,7 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
+#include <vma/vk_mem_alloc.h>
 
 #include <memory>
 
@@ -28,7 +29,6 @@
 #include "Factories/PipelineFactory.h"
 #include "Factories/SwapChainFactory.h"
 
-#include "vma/vk_mem_alloc.h"
 #include "Camera.h"
 
 class VulkanWindow
@@ -67,33 +67,39 @@ private:
 
 	uint32_t AcquireSwapchainImage() const;
 
-	void BeginCommandBuffer(uint32_t imageIndex) const;
+	void BeginCommandBuffer() const;
 
 	void TransitionInitialLayouts(uint32_t imageIndex);
 
-	void DepthPrepass(uint32_t imageIndex, int width, int height);
+	void TransitionNewAttachments(const vk::CommandBuffer &cmd);
+
+	void DepthPrepass(int width, int height);
 
 	void DepthPrepass(uint32_t imageIndex, int width, int height) const;
 
-	void GBufferPass(uint32_t imageIndex, int width, int height);
+	void GBufferPass(int width, int height);
+
+	void RecreateDepthImage(uint32_t width, uint32_t height);
 
 	void GBufferPass(uint32_t imageIndex, int width, int height) const;
 
-	void PrepareGBufferForRead(uint32_t imageIndex);
+	void RecreateGBuffer(uint32_t width, uint32_t height);
+
+	void PrepareGBufferForRead();
 
 	void FinalColorPass(uint32_t imageIndex, int width, int height) const;
 
 	void TransitionForPresentation(uint32_t imageIndex);
 
-	void EndCommandBuffer(uint32_t imageIndex) const;
+	void EndCommandBuffer() const;
 
-	void SubmitFrame(uint32_t imageIndex) const;
+	void SubmitFrame() const;
 
 	void PresentFrame(uint32_t imageIndex) const;
 
-	std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t imageIndex) const;
+	std::vector<vk::DescriptorSet> GetDescriptorSets() const;
 
-	void DrawMeshes(uint32_t imageIndex) const;
+	void DrawMeshes() const;
 
 	void CreateSemaphoreAndFences();
 
@@ -117,7 +123,6 @@ private:
 
 	void CreateGBuffer();
 
-
 	void CreateCommandBuffers();
 
 	void DrawFrame();
@@ -133,6 +138,8 @@ private:
 	void CreateSurface();
 
 	void SetupMouseCallback(GLFWwindow *window);
+
+	void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
 
 	void mouse_callback(double xpos, double ypos);
 
@@ -245,5 +252,8 @@ private:
 
 	glm::vec3 spawnPosition = glm::vec3(10.0f, -5.0f, 0.0f);
 
+	size_t m_FramesInFlight{ 2 };
+	uint32_t m_CurrentFrame{ 0 };
 
+	glm::vec2 m_CurrentScreenSize{};
 };

@@ -55,12 +55,21 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
 
                 if (ai_mesh->HasTextureCoords(0)) {
                     vert.texCoord = glm::vec2(ai_mesh->mTextureCoords[0][v].x, ai_mesh->mTextureCoords[0][v].y);
-                } else {
-                    vert.texCoord = glm::vec2(0.0f);
                 }
-                vert.normal = glm::vec3(ai_mesh->mNormals->x, ai_mesh->mNormals->y, ai_mesh->mNormals->z);
-                vert.bitangent = glm::vec3(ai_mesh->mBitangents->x,ai_mesh->mBitangents->y,ai_mesh->mBitangents->z);
-                vert.tangent = glm::vec3(ai_mesh->mTangents->x,ai_mesh->mTangents->y,ai_mesh->mTangents->z);
+                if (ai_mesh->HasNormals()) {
+                    vert.normal = glm::vec3(ai_mesh->mNormals[v].x,
+                                            ai_mesh->mNormals[v].y,
+                                            ai_mesh->mNormals[v].z);
+                }
+
+                if (ai_mesh->HasTangentsAndBitangents()) {
+                    vert.tangent = glm::vec3(ai_mesh->mTangents[v].x,
+                                             ai_mesh->mTangents[v].y,
+                                             ai_mesh->mTangents[v].z);
+                    vert.bitangent = glm::vec3(ai_mesh->mBitangents[v].x,
+                                               ai_mesh->mBitangents[v].y,
+                                               ai_mesh->mBitangents[v].z);
+                }
 
                 vertices.push_back(vert);
             }

@@ -18,7 +18,6 @@ public:
     PhysicalDevicePicker& operator=(const PhysicalDevicePicker&) = delete;
     PhysicalDevicePicker& operator=(PhysicalDevicePicker&&) noexcept = delete;
 
-
     static vk::raii::PhysicalDevice ChoosePhysicalDevice(const vk::raii::Instance& instance);
     static bool SupportsExtension(const vk::raii::PhysicalDevice &PhysicalDevice, const std::vector<const char *> &RequestedExtensions);
     static bool IsDeviceSuitable(const vk::raii::PhysicalDevice &device, const std::vector<const char *> &requiredExtensions);
