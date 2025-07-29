@@ -29,7 +29,7 @@ layout(set = 0, binding = 3) uniform texture2D Material;
 layout(set = 0, binding = 4) uniform texture2D Depth;
 
 // Point light (world space)
-const vec3 pointLightPos = vec3(0, 3, 0);
+const vec3 pointLightPos = vec3(0, 1, 0);
 const vec3 pointLightColor = vec3(1.0, 0.3, 0.3);
 const float pointLightIntensity = 10.0;
 
@@ -72,13 +72,13 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 vec3 reconstructWorldPos(float depth, mat4 invProj) {
     float z = depth * 2.0 - 1.0;
 
-    vec4 clipSpacePosition = vec4(inTexCoord * 2.0 - 1.0, z, 1.0);
+    vec4 clipSpacePosition = vec4(inTexCoord * 2.0 - 1.0, depth, 1.0);
     vec4 viewSpacePosition = invProj * clipSpacePosition;
 
     // Perspective division
     viewSpacePosition /= viewSpacePosition.w;
 
-    vec4 worldSpacePosition = invProj * viewSpacePosition;
+    vec4 worldSpacePosition = inverse(ubo.view) * viewSpacePosition;
 
     return worldSpacePosition.xyz;
 }
@@ -93,7 +93,7 @@ void main() {
     vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
     float roughness = texture(sampler2D(Material, texSampler), inTexCoord).g;
-    vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).rgb * 2.0 - 1.0;
+    vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).rgb;
 
     // Transform light to view space
     vec3 V = normalize(ubo.cameraPos - worldPos);
@@ -101,7 +101,7 @@ void main() {
     vec3 H = normalize(V + L);
 
     float distance = length(pointLightPos - worldPos);
-    float attenuation = 1.0 / (distance * distance);
+    float attenuation = 1.0 / max((distance * distance), 0.0001f);
     vec3 radiance = pointLightColor * pointLightIntensity * attenuation;
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
