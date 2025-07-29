@@ -6,7 +6,6 @@
 #define ALLOCATOR_H
 #include <iostream>
 #include <unordered_map>
-#include <__msvc_ostream.hpp>
 
 #include "vma/vk_mem_alloc.h"
 
