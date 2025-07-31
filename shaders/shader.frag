@@ -19,9 +19,9 @@ struct PointLight
     vec4 Color; // w is intensity
 };
 
-//layout(constant_id = 2) const uint MAX_LIGHTS = 1;
+layout(constant_id = 2) const uint MAX_LIGHTS = 1;
 layout(set = 1, binding = 2, std430) readonly buffer LightBuffer {
-    PointLight pointLights[1];
+    PointLight pointLights[MAX_LIGHTS];
 } lightBuffer;
 
 
@@ -123,7 +123,7 @@ void main() {
 
     vec3 Lo = vec3(0,0,0);
 
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < MAX_LIGHTS; ++i) {
         vec3 V = normalize(ubo.cameraPos - worldPos);
         vec3 lightPos = lightBuffer.pointLights[i].Position.xyz;
         vec3 L = normalize(lightPos - worldPos);

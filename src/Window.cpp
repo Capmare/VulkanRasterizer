@@ -273,7 +273,6 @@ void VulkanWindow::InitVulkan() {
 
 
 	Buffer::UploadData(m_LightBufferInfo, m_PointLights.data(), sizeof(PointLight) * m_PointLights.size());
-
 	vk::SamplerCreateInfo samplerInfo = {
 		{},
 		vk::Filter::eLinear,
@@ -404,7 +403,10 @@ void VulkanWindow::InitVulkan() {
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
 		Buffer::Destroy(m_VmaAllocator,m_UniformBufferInfo.m_Buffer,m_UniformBufferInfo.m_Allocation,m_AllocationTracker.get());
+		Buffer::Destroy(m_VmaAllocator,m_LightBufferInfo.m_Buffer,m_LightBufferInfo.m_Allocation,m_AllocationTracker.get());
+
 	});
+
 
 	m_AllocationTracker->PrintAllocations();
 }
@@ -1050,7 +1052,7 @@ void VulkanWindow::CreateDescriptorSets() {
 
 
 	vk::DescriptorBufferInfo LightBufferInfo{};
-	LightBufferInfo.buffer = m_UniformBufferInfo.m_Buffer;
+	LightBufferInfo.buffer = m_LightBufferInfo.m_Buffer;
 	LightBufferInfo.offset = 0;
 	LightBufferInfo.range = sizeof(PointLight) * m_PointLights.size();
 
@@ -1104,6 +1106,9 @@ void VulkanWindow::CreatePipelineLayout() {
 	pushConstantRange.offset = 0;
 	pushConstantRange.size = sizeof(Material);
 	pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+
+
 
 	vk::PipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.setLayoutCount = static_cast<uint32_t>(DescriptorSetLayouts.size());
@@ -1208,101 +1213,99 @@ void VulkanWindow::CreateDepthPrepassPipeline() {
         .SetDepthFormat(depthFormat)
         .Build());
 }
-
 void VulkanWindow::CreateGraphicsPipeline() {
+    // depth stencil
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = vk::CompareOp::eEqual;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
 
-	// depth stencil
-	vk::PipelineDepthStencilStateCreateInfo depthStencil{};
-	depthStencil.depthTestEnable = VK_FALSE;
-	depthStencil.depthWriteEnable = VK_FALSE;
-	depthStencil.depthCompareOp = vk::CompareOp::eEqual;
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.stencilTestEnable = VK_FALSE;
+    // pipeline color attachment
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.blendEnable = VK_FALSE;
 
-	// pipeline color attachment
-	vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask =
-		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-	colorBlendAttachment.blendEnable = VK_FALSE;
+    // sampling
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
 
-	// sampling
-	vk::PipelineMultisampleStateCreateInfo multisampling{};
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    // rasterizer
+    vk::PipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = vk::PolygonMode::eFill;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
+    rasterizer.depthBiasEnable = VK_FALSE;
 
-	// rasterizer
-	vk::PipelineRasterizationStateCreateInfo rasterizer{};
-	rasterizer.depthClampEnable = VK_FALSE;
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;
-	rasterizer.polygonMode = vk::PolygonMode::eFill;
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = vk::CullModeFlagBits::eNone;
-	rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-	rasterizer.depthBiasEnable = VK_FALSE;
+    // input assembly
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-	// input assembly
-	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
-	inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
+    // vertex input info
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
 
-	// vertex input info
-	vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+    // Specialization constants
+    uint32_t maxLights = static_cast<uint32_t>(m_PointLights.size());
 
-	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vk::SpecializationMapEntry specializationEntry{};
+    specializationEntry.constantID = 2;
+    specializationEntry.offset = 0;
+    specializationEntry.size = sizeof(uint32_t);
 
-	uint32_t textureCount = static_cast<uint32_t>(m_ImageResource.size());
+    vk::SpecializationInfo specializationInfo{};
+    specializationInfo.mapEntryCount = 1;
+    specializationInfo.pMapEntries = &specializationEntry;
+    specializationInfo.dataSize = sizeof(maxLights);
+    specializationInfo.pData = &maxLights;
 
-	vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
+    // Shader stages
+    vk::PipelineShaderStageCreateInfo vertexStageInfo{};
+    vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
+    vertexStageInfo.setModule(*m_ShaderModule[0]);
+    vertexStageInfo.setPName("main");
 
-	// Data buffer holding the value
-	vk::SpecializationInfo specializationInfo;
-	specializationInfo.mapEntryCount = 1;
-	specializationInfo.pMapEntries = &specializationEntry;
-	specializationInfo.dataSize = sizeof(textureCount);
-	specializationInfo.pData = &textureCount;
+    vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
+    fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
+    fragmentStageInfo.setModule(*m_ShaderModule[1]);
+    fragmentStageInfo.setPName("main");
+    fragmentStageInfo.pSpecializationInfo = &specializationInfo; // Attach spec info here
 
-	// shader stages
-	vk::PipelineShaderStageCreateInfo vertexStageInfo{};
-	vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
-	vertexStageInfo.setModule(*m_ShaderModule[0]);
-	vertexStageInfo.setPName("main");
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
 
-	vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
-	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
-	fragmentStageInfo.setModule(*m_ShaderModule[1]);
-	fragmentStageInfo.setPName("main");
-	fragmentStageInfo.pSpecializationInfo = &specializationInfo;
+    // viewport state
+    vk::PipelineViewportStateCreateInfo viewportState{};
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = nullptr;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = nullptr;
 
-	std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
+    // color and depth format
+    vk::Format colorFormat = m_SwapChainFactory->Format.format;
+    vk::Format depthFormat = m_DepthImageFactory->GetFormat();
 
-	// viewport state
-	vk::PipelineViewportStateCreateInfo viewportState{};
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = nullptr;
-
-	// color and depth format
-	vk::Format colorFormat = m_SwapChainFactory->Format.format;
-	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
-
-	m_GraphicsPipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
-		->SetShaderStages(shaderStages)
-		.SetVertexInput(vertexInputInfo)
-		.SetInputAssembly(inputAssembly)
-		.SetRasterizer(rasterizer)
-		.SetMultisampling(multisampling)
-		.SetColorBlendAttachments({colorBlendAttachment})
-		.SetViewportState(viewportState)
-		.SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
-		.SetDepthStencil(depthStencil)
-		.SetLayout(*m_PipelineLayout)
-		.SetColorFormats({colorFormat})
-		.SetDepthFormat(depthFormat)
-		.Build());
-
+    m_GraphicsPipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
+        ->SetShaderStages(shaderStages)
+        .SetVertexInput(vertexInputInfo)
+        .SetInputAssembly(inputAssembly)
+        .SetRasterizer(rasterizer)
+        .SetMultisampling(multisampling)
+        .SetColorBlendAttachments({colorBlendAttachment})
+        .SetViewportState(viewportState)
+        .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
+        .SetDepthStencil(depthStencil)
+        .SetLayout(*m_PipelineLayout)
+        .SetColorFormats({colorFormat})
+        .SetDepthFormat(depthFormat)
+        .Build());
 }
 
 void VulkanWindow::CreateGBufferPipeline() {

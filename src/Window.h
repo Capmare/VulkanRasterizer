@@ -255,8 +255,17 @@ private:
 	std::vector<PointLight> m_PointLights{
 		{
 			{0,1,0,0},
-			{1,1,.3f,2.f}
+			{1,0,0.f,2.f}
+		},
+		{
+			{2,1,0,0},
+			{0.f,1,.0f,2.f}
+		},
+		{
+				{4,1,0,0},
+				{0.f,0,1.f,2.f}
 		}
+
 	};
 
 	glm::vec3 spawnPosition = glm::vec3(0.0f, 0.0f, 0.0f);
