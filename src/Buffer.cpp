@@ -20,6 +20,7 @@ BufferInfo Buffer::CreateUnmapped(VmaAllocator allocator, vk::DeviceSize size, v
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = vk::SharingMode::eExclusive;
 
+
     VmaAllocationCreateInfo allocCreateInfo{};
     allocCreateInfo.usage = memoryUsage;
     allocCreateInfo.flags = flags ;

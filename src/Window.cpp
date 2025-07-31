@@ -98,7 +98,7 @@ void VulkanWindow::UpdateUBO() {
 
     ubo.model = glm::translate(glm::mat4(1.0f), spawnPosition);
 	ubo.view = m_Camera->GetViewMatrix();
-	float aspectRatio = static_cast<float>(m_CurrentScreenSize.x) / m_CurrentScreenSize.y;
+	const float aspectRatio = m_CurrentScreenSize.x / m_CurrentScreenSize.y;
     ubo.proj = m_Camera->GetProjectionMatrix(aspectRatio);
 	ubo.cameraPos = m_Camera->position;
 
@@ -116,15 +116,13 @@ void VulkanWindow::SetupMouseCallback(GLFWwindow* window) {
 	glfwSetWindowUserPointer(window, this);
 
 	glfwSetCursorPosCallback(window, [](GLFWwindow* w, double xpos, double ypos) {
-		VulkanWindow* self = static_cast<VulkanWindow*>(glfwGetWindowUserPointer(w));
-		if (self) {
+		if (const auto self = static_cast<VulkanWindow*>(glfwGetWindowUserPointer(w))) {
 			self->mouse_callback(xpos, ypos);
 		}
 	});
 
 	glfwSetMouseButtonCallback(m_Window, [](GLFWwindow* window, int button, int action, int mods) {
-		VulkanWindow* self = static_cast<VulkanWindow*>(glfwGetWindowUserPointer(window));
-		if (self) {
+		if (const auto self = static_cast<VulkanWindow*>(glfwGetWindowUserPointer(window))) {
 			self->mouse_button_callback(window, button, action, mods);
 		}
 	});
@@ -231,6 +229,7 @@ void VulkanWindow::InitVulkan() {
 
 	m_Buffer = std::make_unique<Buffer>();
 	m_Camera = std::make_unique<Camera>();
+	m_Camera->UpdateTarget();
 
 	m_AllocationTracker = std::make_unique<ResourceTracker>();
 
@@ -262,6 +261,18 @@ void VulkanWindow::InitVulkan() {
 		VMA_MEMORY_USAGE_CPU_TO_GPU,
 		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
 
+	m_LightBufferInfo = m_Buffer->CreateMapped(
+		m_VmaAllocator,
+		sizeof(PointLight) * m_PointLights.size(),
+		vk::BufferUsageFlagBits::eStorageBuffer,
+		VMA_MEMORY_USAGE_CPU_TO_GPU,
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+		m_AllocationTracker.get(),
+		"PointLights"
+	);
+
+
+	Buffer::UploadData(m_LightBufferInfo, m_PointLights.data(), sizeof(PointLight) * m_PointLights.size());
 
 	vk::SamplerCreateInfo samplerInfo = {
 		{},
@@ -361,6 +372,7 @@ void VulkanWindow::InitVulkan() {
 		m_DescriptorSetFactory
 			->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
 			.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, static_cast<uint32_t>(m_ImageResource.size()))
+			.AddBinding(2,vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
 			.Build()
 		)
 	);
@@ -508,10 +520,6 @@ void VulkanWindow::TransitionInitialLayouts(uint32_t imageIndex) {
         vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
         vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
-    // ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
-    //     m_DepthImage, vk::ImageLayout::eDepthAttachmentOptimal,
-    //     vk::AccessFlagBits::eNone, vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-    //     vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eEarlyFragmentTests);
 
 }
 
@@ -613,10 +621,6 @@ void VulkanWindow::GBufferPass(int width, int height) {
 		vk::AccessFlagBits::eNone, vk::AccessFlagBits::eColorAttachmentWrite,
 		vk::PipelineStageFlagBits::eNone, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
-	//ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame], m_DepthImage,
-	//vk::ImageLayout::eColorAttachmentOptimal,
-	//vk::AccessFlagBits::eNone, vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-	//vk::PipelineStageFlagBits::eNone, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
@@ -1029,8 +1033,6 @@ void VulkanWindow::CreateShaderModules() {
 }
 
 void VulkanWindow::CreateDescriptorSets() {
-
-
 	// global descriptor set
 	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
 
@@ -1042,9 +1044,15 @@ void VulkanWindow::CreateDescriptorSets() {
 	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
 
 	vk::DescriptorImageInfo SamplerInfo{};
-	SamplerInfo.imageLayout = vk::ImageLayout::eUndefined;
+	SamplerInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 	SamplerInfo.imageView = VK_NULL_HANDLE;
 	SamplerInfo.sampler = *m_Sampler;
+
+
+	vk::DescriptorBufferInfo LightBufferInfo{};
+	LightBufferInfo.buffer = m_UniformBufferInfo.m_Buffer;
+	LightBufferInfo.offset = 0;
+	LightBufferInfo.range = sizeof(PointLight) * m_PointLights.size();
 
 	for (auto& ds: *m_GlobalDescriptorSets) {
 		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
@@ -1074,7 +1082,18 @@ void VulkanWindow::CreateDescriptorSets() {
 		descriptorWrites[1].descriptorCount = static_cast<uint32_t>(DescriptorImgInfos.size());
 		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
 
+
+		descriptorWrites.emplace_back();
+		descriptorWrites[2].dstSet = ds;
+		descriptorWrites[2].dstBinding = 2;
+		descriptorWrites[2].dstArrayElement = 0;
+		descriptorWrites[2].descriptorType = vk::DescriptorType::eStorageBuffer;
+		descriptorWrites[2].descriptorCount = 1;
+		descriptorWrites[2].pBufferInfo = &LightBufferInfo;
+
 		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
+
+
 	}
 }
 

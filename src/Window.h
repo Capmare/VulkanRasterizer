@@ -31,6 +31,14 @@
 
 #include "Camera.h"
 
+
+
+struct PointLight {
+	glm::vec4 Position;
+	glm::vec4 Color;
+};
+
+
 class VulkanWindow
 {
 public:
@@ -218,6 +226,7 @@ private:
 	VkImageView m_GBufferMaterialView{};
 
 	BufferInfo m_UniformBufferInfo{};
+	BufferInfo m_LightBufferInfo{};
 
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
@@ -240,10 +249,15 @@ private:
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
 
-	double lastX = 400, lastY = 300;
+	double lastX = 0, lastY = 0;
 	bool firstMouse = true;
 
-
+	std::vector<PointLight> m_PointLights{
+		{
+			{0,1,0,0},
+			{1,1,.3f,2.f}
+		}
+	};
 
 	glm::vec3 spawnPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 

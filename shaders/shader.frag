@@ -13,6 +13,18 @@ layout(set = 1, binding = 0) uniform sampler texSampler;
 layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
 layout(set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
+struct PointLight
+{
+    vec4 Position; // w is unused
+    vec4 Color; // w is intensity
+};
+
+//layout(constant_id = 2) const uint MAX_LIGHTS = 1;
+layout(set = 1, binding = 2, std430) readonly buffer LightBuffer {
+    PointLight pointLights[1];
+} lightBuffer;
+
+
 layout(std140, binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
@@ -26,10 +38,6 @@ layout(set = 0, binding = 2) uniform texture2D Normal;
 layout(set = 0, binding = 3) uniform texture2D Material;
 layout(set = 0, binding = 4) uniform texture2D Depth;
 
-// Point light (world space)
-const vec3 pointLightPos = vec3(0, 1, 0);
-const vec3 pointLightColor = vec3(1.0, 1.0, 0.3);
-const float pointLightIntensity = 2.0;
 
 
 vec3 Uncharted2Tonemap(vec3 x) {
@@ -51,7 +59,6 @@ vec3 ToneMapUncharted2(vec3 color) {
     vec3 whiteScale = 1.0 / Uncharted2Tonemap(vec3(W));
     return mapped * whiteScale;
 }
-
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -109,38 +116,40 @@ void main() {
     // Reconstruct view-space position
     vec3 worldPos = reconstructWorldPos(depth, inverse(ubo.proj));
 
-
     vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
     float roughness = texture(sampler2D(Material, texSampler), inTexCoord).g;
     vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).rgb;
 
-    // Transform light to view space
-    vec3 V = normalize(ubo.cameraPos - worldPos);
-    vec3 L = normalize(pointLightPos - worldPos);
-    vec3 H = normalize(V + L);
+    vec3 Lo = vec3(0,0,0);
 
-    float distance = length(pointLightPos - worldPos);
-    float attenuation = 1.0 / max((distance * distance), 0.0001f);
-    vec3 radiance = pointLightColor * pointLightIntensity * attenuation;
+    for (int i = 0; i < 1; ++i) {
+        vec3 V = normalize(ubo.cameraPos - worldPos);
+        vec3 lightPos = lightBuffer.pointLights[i].Position.xyz;
+        vec3 L = normalize(lightPos - worldPos);
+        vec3 H = normalize(V + L);
 
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        float distance = length(lightPos - worldPos);
+        float attenuation = 1.0 / max((distance * distance), 0.0001f);
+        vec3 radiance = lightBuffer.pointLights[i].Color.xyz * lightBuffer.pointLights[i].Color.w * attenuation;
 
-    float NDF = DistributionGGX(N, H, roughness);
-    float G = GeometrySmith(N, V, L, roughness);
-    vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
-    denominator = max(denominator, 0.001);
-    vec3 specular = numerator / denominator;
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
+        denominator = max(denominator, 0.001);
+        vec3 specular = numerator / denominator;
 
-    float NdotL = max(dot(N, L), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;
 
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
     vec3 ambient = vec3(0.03) * albedo;
     vec3 color = ambient + Lo;
 
