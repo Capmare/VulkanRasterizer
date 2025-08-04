@@ -261,7 +261,7 @@ void VulkanWindow::InitVulkan() {
 		VMA_MEMORY_USAGE_CPU_TO_GPU,
 		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
 
-	m_LightBufferInfo = m_Buffer->CreateMapped(
+	m_PointLightBufferInfo = m_Buffer->CreateMapped(
 		m_VmaAllocator,
 		sizeof(PointLight) * m_PointLights.size(),
 		vk::BufferUsageFlagBits::eStorageBuffer,
@@ -271,8 +271,21 @@ void VulkanWindow::InitVulkan() {
 		"PointLights"
 	);
 
+	m_DirectionalLightBufferInfo = m_Buffer->CreateMapped(
+	m_VmaAllocator,
+	sizeof(DirectionalLight) * m_DirectionalLights.size(),
+	vk::BufferUsageFlagBits::eStorageBuffer,
+	VMA_MEMORY_USAGE_CPU_TO_GPU,
+	VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+	m_AllocationTracker.get(),
+	"DirectionalLights"
+	);
 
-	Buffer::UploadData(m_LightBufferInfo, m_PointLights.data(), sizeof(PointLight) * m_PointLights.size());
+
+	Buffer::UploadData(m_PointLightBufferInfo, m_PointLights.data(), sizeof(PointLight) * m_PointLights.size());
+	Buffer::UploadData(m_DirectionalLightBufferInfo, m_DirectionalLights.data(), sizeof(DirectionalLight) * m_DirectionalLights.size());
+
+
 	vk::SamplerCreateInfo samplerInfo = {
 		{},
 		vk::Filter::eLinear,
@@ -372,6 +385,7 @@ void VulkanWindow::InitVulkan() {
 			->AddBinding(0,vk::DescriptorType::eSampler,vk::ShaderStageFlagBits::eFragment)
 			.AddBinding(1,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, static_cast<uint32_t>(m_ImageResource.size()))
 			.AddBinding(2,vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
+			.AddBinding(3,vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
 			.Build()
 		)
 	);
@@ -403,7 +417,8 @@ void VulkanWindow::InitVulkan() {
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
 		Buffer::Destroy(m_VmaAllocator,m_UniformBufferInfo.m_Buffer,m_UniformBufferInfo.m_Allocation,m_AllocationTracker.get());
-		Buffer::Destroy(m_VmaAllocator,m_LightBufferInfo.m_Buffer,m_LightBufferInfo.m_Allocation,m_AllocationTracker.get());
+		Buffer::Destroy(m_VmaAllocator,m_PointLightBufferInfo.m_Buffer,m_PointLightBufferInfo.m_Allocation,m_AllocationTracker.get());
+		Buffer::Destroy(m_VmaAllocator,m_DirectionalLightBufferInfo.m_Buffer,m_DirectionalLightBufferInfo.m_Allocation,m_AllocationTracker.get());
 
 	});
 
@@ -1052,9 +1067,14 @@ void VulkanWindow::CreateDescriptorSets() {
 
 
 	vk::DescriptorBufferInfo LightBufferInfo{};
-	LightBufferInfo.buffer = m_LightBufferInfo.m_Buffer;
+	LightBufferInfo.buffer = m_PointLightBufferInfo.m_Buffer;
 	LightBufferInfo.offset = 0;
 	LightBufferInfo.range = sizeof(PointLight) * m_PointLights.size();
+
+	vk::DescriptorBufferInfo DirectionalLightBufferInfo{};
+	DirectionalLightBufferInfo.buffer = m_DirectionalLightBufferInfo.m_Buffer;
+	DirectionalLightBufferInfo.offset = 0;
+	DirectionalLightBufferInfo.range = sizeof(DirectionalLight) * m_DirectionalLights.size();
 
 	for (auto& ds: *m_GlobalDescriptorSets) {
 		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
@@ -1084,7 +1104,6 @@ void VulkanWindow::CreateDescriptorSets() {
 		descriptorWrites[1].descriptorCount = static_cast<uint32_t>(DescriptorImgInfos.size());
 		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
 
-
 		descriptorWrites.emplace_back();
 		descriptorWrites[2].dstSet = ds;
 		descriptorWrites[2].dstBinding = 2;
@@ -1092,6 +1111,15 @@ void VulkanWindow::CreateDescriptorSets() {
 		descriptorWrites[2].descriptorType = vk::DescriptorType::eStorageBuffer;
 		descriptorWrites[2].descriptorCount = 1;
 		descriptorWrites[2].pBufferInfo = &LightBufferInfo;
+
+		descriptorWrites.emplace_back();
+		descriptorWrites[3].dstSet = ds;
+		descriptorWrites[3].dstBinding = 3;
+		descriptorWrites[3].dstArrayElement = 0;
+		descriptorWrites[3].descriptorType = vk::DescriptorType::eStorageBuffer;
+		descriptorWrites[3].descriptorCount = 1;
+		descriptorWrites[3].pBufferInfo = &DirectionalLightBufferInfo;
+
 
 		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
 
@@ -1213,8 +1241,9 @@ void VulkanWindow::CreateDepthPrepassPipeline() {
         .SetDepthFormat(depthFormat)
         .Build());
 }
+
 void VulkanWindow::CreateGraphicsPipeline() {
-    // depth stencil
+    // Depth stencil
     vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.depthTestEnable = VK_FALSE;
     depthStencil.depthWriteEnable = VK_FALSE;
@@ -1222,19 +1251,19 @@ void VulkanWindow::CreateGraphicsPipeline() {
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
-    // pipeline color attachment
+    // Color blend attachment
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask =
         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
         vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
     colorBlendAttachment.blendEnable = VK_FALSE;
 
-    // sampling
+    // Multisampling
     vk::PipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
 
-    // rasterizer
+    // Rasterizer
     vk::PipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
@@ -1244,28 +1273,33 @@ void VulkanWindow::CreateGraphicsPipeline() {
     rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
     rasterizer.depthBiasEnable = VK_FALSE;
 
-    // input assembly
+    // Input assembly
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    // vertex input info
+    // Vertex input info
     vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.vertexBindingDescriptionCount = 0;
 
-    // Specialization constants
-    uint32_t maxLights = static_cast<uint32_t>(m_PointLights.size());
+    using LightSpecPair = std::pair<uint32_t, uint32_t>;
+    LightSpecPair specData{
+        static_cast<uint32_t>(m_PointLights.size()),
+        static_cast<uint32_t>(m_DirectionalLights.size())
+    };
 
-    vk::SpecializationMapEntry specializationEntry{};
-    specializationEntry.constantID = 2;
-    specializationEntry.offset = 0;
-    specializationEntry.size = sizeof(uint32_t);
+    // Map entries
+    std::array<vk::SpecializationMapEntry, 2> specMapEntries = {
+        vk::SpecializationMapEntry{2, offsetof(LightSpecPair, first), sizeof(uint32_t)},  // Point lights
+        vk::SpecializationMapEntry{3, offsetof(LightSpecPair, second), sizeof(uint32_t)} // Directional lights
+    };
 
+    // Specialization info
     vk::SpecializationInfo specializationInfo{};
-    specializationInfo.mapEntryCount = 1;
-    specializationInfo.pMapEntries = &specializationEntry;
-    specializationInfo.dataSize = sizeof(maxLights);
-    specializationInfo.pData = &maxLights;
+    specializationInfo.mapEntryCount = static_cast<uint32_t>(specMapEntries.size());
+    specializationInfo.pMapEntries = specMapEntries.data();
+    specializationInfo.dataSize = sizeof(LightSpecPair);
+    specializationInfo.pData = &specData;
 
     // Shader stages
     vk::PipelineShaderStageCreateInfo vertexStageInfo{};
@@ -1277,36 +1311,38 @@ void VulkanWindow::CreateGraphicsPipeline() {
     fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
     fragmentStageInfo.setModule(*m_ShaderModule[1]);
     fragmentStageInfo.setPName("main");
-    fragmentStageInfo.pSpecializationInfo = &specializationInfo; // Attach spec info here
+    fragmentStageInfo.pSpecializationInfo = &specializationInfo;
 
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
 
-    // viewport state
+    // Viewport state
     vk::PipelineViewportStateCreateInfo viewportState{};
     viewportState.viewportCount = 1;
     viewportState.pViewports = nullptr;
     viewportState.scissorCount = 1;
     viewportState.pScissors = nullptr;
 
-    // color and depth format
+    // Formats
     vk::Format colorFormat = m_SwapChainFactory->Format.format;
     vk::Format depthFormat = m_DepthImageFactory->GetFormat();
 
+    // Build pipeline
     m_GraphicsPipeline = std::make_unique<vk::raii::Pipeline>(m_GraphicsPipelineFactory
         ->SetShaderStages(shaderStages)
         .SetVertexInput(vertexInputInfo)
         .SetInputAssembly(inputAssembly)
         .SetRasterizer(rasterizer)
         .SetMultisampling(multisampling)
-        .SetColorBlendAttachments({colorBlendAttachment})
+        .SetColorBlendAttachments({ colorBlendAttachment })
         .SetViewportState(viewportState)
         .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
         .SetDepthStencil(depthStencil)
         .SetLayout(*m_PipelineLayout)
-        .SetColorFormats({colorFormat})
+        .SetColorFormats({ colorFormat })
         .SetDepthFormat(depthFormat)
         .Build());
 }
+
 
 void VulkanWindow::CreateGBufferPipeline() {
     vk::PipelineDepthStencilStateCreateInfo depthStencil{};

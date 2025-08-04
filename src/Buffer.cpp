@@ -26,12 +26,34 @@ BufferInfo Buffer::CreateUnmapped(VmaAllocator allocator, vk::DeviceSize size, v
     allocCreateInfo.flags = flags ;
 
     m_BufferInfos.emplace_back(BufferInfo());
-    vmaCreateBuffer(allocator,
-                    reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo),
-                    &allocCreateInfo,
-                    &m_BufferInfos.back().m_Buffer,
-                    &m_BufferInfos.back().m_Allocation,
-                    &m_BufferInfos.back().m_AllocInfo);
+    VkResult result = vmaCreateBuffer(allocator,
+                                    reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo),
+                                    &allocCreateInfo,
+                                    &m_BufferInfos.back().m_Buffer,
+                                    &m_BufferInfos.back().m_Allocation,
+                                    &m_BufferInfos.back().m_AllocInfo);
+
+    if (result != VK_SUCCESS) {
+        std::cerr << "[Vulkan Error] Failed to create buffer! " <<  AllocName << " -  VkResult: " << result << std::endl;
+
+        if (result == VK_ERROR_OUT_OF_HOST_MEMORY) {
+            std::cerr << "Reason: Out of host memory." << std::endl;
+        } else if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            std::cerr << "Reason: Out of device memory." << std::endl;
+        } else if (result == VK_ERROR_INITIALIZATION_FAILED) {
+            std::cerr << "Reason: Initialization failed." << std::endl;
+        } else if (result == VK_ERROR_MEMORY_MAP_FAILED) {
+            std::cerr << "Reason: Memory map failed." << std::endl;
+        } else {
+            std::cerr << "Reason: Unknown." << std::endl;
+        }
+
+        // Optionally, set buffer to null to avoid later crashes
+        m_BufferInfos.back().m_Buffer = VK_NULL_HANDLE;
+        m_BufferInfos.back().m_Allocation = nullptr;
+
+        throw std::runtime_error("Vulkan buffer creation failed!");
+    }
 
     m_BufferInfos.back().m_MappedData = m_BufferInfos.back().m_AllocInfo.pMappedData;
     m_BufferInfos.back().size = bufferInfo.size;

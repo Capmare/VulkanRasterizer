@@ -38,6 +38,10 @@ struct PointLight {
 	glm::vec4 Color;
 };
 
+struct DirectionalLight {
+	glm::vec4 Direction;
+	glm::vec4 Color; // w is intensity
+};
 
 class VulkanWindow
 {
@@ -226,7 +230,8 @@ private:
 	VkImageView m_GBufferMaterialView{};
 
 	BufferInfo m_UniformBufferInfo{};
-	BufferInfo m_LightBufferInfo{};
+	BufferInfo m_PointLightBufferInfo{};
+	BufferInfo m_DirectionalLightBufferInfo{};
 
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
@@ -255,18 +260,28 @@ private:
 	std::vector<PointLight> m_PointLights{
 		{
 			{0,1,0,0},
-			{1,0,0.f,2.f}
+			{1,0,0.f,7.f}
 		},
 		{
 			{2,1,0,0},
-			{0.f,1,.0f,2.f}
+			{0.f,1,.0f,7.f}
 		},
 		{
 				{4,1,0,0},
-				{0.f,0,1.f,2.f}
+				{0.f,0,1.f,7.f}
 		}
 
 	};
+
+	std::vector<DirectionalLight> m_DirectionalLights =
+	{
+		{
+			glm::vec4(-0.3f, -1.0f, -0.3f, 0.0f),
+			glm::vec4(1.0f, 0.95f, 0.9f, 5.0f)
+		}
+	};
+
+
 
 	glm::vec3 spawnPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 

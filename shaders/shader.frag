@@ -19,10 +19,21 @@ struct PointLight
     vec4 Color; // w is intensity
 };
 
-layout(constant_id = 2) const uint MAX_LIGHTS = 1;
-layout(set = 1, binding = 2, std430) readonly buffer LightBuffer {
-    PointLight pointLights[MAX_LIGHTS];
-} lightBuffer;
+struct DirectionalLight {
+    vec4 Direction; // w unused
+    vec4 Color;     // w intensity
+};
+
+layout(constant_id = 2) const uint MAX_POINT_LIGHTS = 1u;
+layout(constant_id = 3) const uint MAX_DIRECTIONAL_LIGHTS = 1u;
+
+layout(set = 1, binding = 2, std430) readonly buffer PointLightBuffer {
+    PointLight pointLights[MAX_POINT_LIGHTS];
+} pointLightBuffer;
+
+layout(set = 1, binding = 3, std430) readonly buffer DirLightBuffer {
+    DirectionalLight dirLights[MAX_DIRECTIONAL_LIGHTS];
+} dirLightBuffer;
 
 
 layout(std140, binding = 0) uniform UBO {
@@ -122,16 +133,16 @@ void main() {
     vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).rgb;
 
     vec3 Lo = vec3(0,0,0);
+    vec3 V = normalize(ubo.cameraPos - worldPos);
 
-    for (int i = 0; i < MAX_LIGHTS; ++i) {
-        vec3 V = normalize(ubo.cameraPos - worldPos);
-        vec3 lightPos = lightBuffer.pointLights[i].Position.xyz;
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        vec3 lightPos = pointLightBuffer.pointLights[i].Position.xyz;
         vec3 L = normalize(lightPos - worldPos);
         vec3 H = normalize(V + L);
 
         float distance = length(lightPos - worldPos);
         float attenuation = 1.0 / max((distance * distance), 0.0001f);
-        vec3 radiance = lightBuffer.pointLights[i].Color.xyz * lightBuffer.pointLights[i].Color.w * attenuation;
+        vec3 radiance = pointLightBuffer.pointLights[i].Color.xyz * pointLightBuffer.pointLights[i].Color.w * attenuation;
 
         vec3 F0 = mix(vec3(0.04), albedo, metallic);
         vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
@@ -150,6 +161,30 @@ void main() {
         float NdotL = max(dot(N, L), 0.0);
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
+
+    for (int i = 0; i < MAX_DIRECTIONAL_LIGHTS; ++i) {
+        vec3 L = normalize(-dirLightBuffer.dirLights[i].Direction.xyz);
+        vec3 H = normalize(V + L);
+        vec3 radiance = dirLightBuffer.dirLights[i].Color.xyz * dirLightBuffer.dirLights[i].Color.w;
+
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+
+        vec3 numerator = NDF * G * F;
+        float denominator = max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), 0.001);
+        vec3 specular = numerator / denominator;
+
+        vec3 kS = F;
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+
+
+
     vec3 ambient = vec3(0.03) * albedo;
     vec3 color = ambient + Lo;
 
