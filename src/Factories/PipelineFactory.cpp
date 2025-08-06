@@ -1,7 +1,7 @@
 #include "PipelineFactory.h"
 
 
-PipelineFactory::PipelineFactory(vk::raii::Device& device)
+PipelineFactory::PipelineFactory(const vk::raii::Device& device)
     : m_Device(device) {}
 
 PipelineFactory& PipelineFactory::SetShaderStages(const std::vector<vk::PipelineShaderStageCreateInfo>& stages) {
@@ -45,7 +45,7 @@ PipelineFactory& PipelineFactory::SetDynamicStates(const std::vector<vk::Dynamic
     return *this;
 }
 
-PipelineFactory& PipelineFactory::SetLayout(vk::raii::PipelineLayout& layout) {
+PipelineFactory& PipelineFactory::SetLayout(const vk::PipelineLayout& layout) {
     m_PipelineLayout = &layout;
     return *this;
 }

@@ -30,18 +30,10 @@
 #include "Factories/SwapChainFactory.h"
 
 #include "Camera.h"
+#include "Passes/ColorPass.h"
 
 
-
-struct PointLight {
-	glm::vec4 Position;
-	glm::vec4 Color;
-};
-
-struct DirectionalLight {
-	glm::vec4 Direction;
-	glm::vec4 Color; // w is intensity
-};
+#include "Structs/Lights.h"
 
 class VulkanWindow
 {
@@ -77,7 +69,7 @@ private:
 
 	void PrepareFrame();
 
-	uint32_t AcquireSwapchainImage() const;
+	[[nodiscard]] uint32_t AcquireSwapchainImage() const;
 
 	void BeginCommandBuffer() const;
 
@@ -86,8 +78,6 @@ private:
 	void TransitionNewAttachments(const vk::CommandBuffer &cmd);
 
 	void DepthPrepass(int width, int height);
-
-	void DepthPrepass(uint32_t imageIndex, int width, int height) const;
 
 	void GBufferPass(int width, int height);
 
@@ -98,8 +88,6 @@ private:
 	void RecreateGBuffer(uint32_t width, uint32_t height);
 
 	void PrepareGBufferForRead();
-
-	void FinalColorPass(uint32_t imageIndex, int width, int height) const;
 
 	void TransitionForPresentation(uint32_t imageIndex);
 
@@ -128,8 +116,6 @@ private:
 	void CreatePipelineLayout();
 
 	void CreateDepthPrepassPipeline();
-
-	void CreateGraphicsPipeline();
 
 	void CreateGBufferPipeline();
 
@@ -166,7 +152,6 @@ private:
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
 
-	std::unique_ptr<PipelineFactory> m_GraphicsPipelineFactory{};
 	std::unique_ptr<PipelineFactory> m_DepthPipelineFactory{};
 	std::unique_ptr<PipelineFactory> m_GBufferPipelineFactory{};
 
@@ -180,7 +165,6 @@ private:
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
 
-	std::unique_ptr<vk::raii::Pipeline> m_GraphicsPipeline{};
 	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
 	std::unique_ptr<vk::raii::Pipeline> m_GBufferPipeline{};
 
@@ -196,7 +180,6 @@ private:
 	bool m_bFrameBufferResized{ false };
 
 	std::vector<vk::ShaderEXT> rawShaders{};
-	std::vector<vk::raii::ShaderModule> m_ShaderModules{};
 	std::vector<vk::raii::ShaderModule> m_DepthShaderModules{};
 	std::vector<vk::raii::ShaderModule> m_GBufferShaderModules{};
 
@@ -250,6 +233,7 @@ private:
 
 	std::unique_ptr<Camera> m_Camera{};
 
+	std::unique_ptr<ColorPass> m_ColorPass{};
 
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
@@ -257,23 +241,24 @@ private:
 	double lastX = 0, lastY = 0;
 	bool firstMouse = true;
 
-	std::vector<PointLight> m_PointLights{
-		{
-			{0,1,0,0},
-			{1,0,0.f,7.f}
-		},
-		{
-			{2,1,0,0},
-			{0.f,1,.0f,7.f}
-		},
-		{
-				{4,1,0,0},
-				{0.f,0,1.f,7.f}
-		}
+
+	const std::vector<PointLight> m_PointLights{
+				{
+					{0,1,0,0},
+					{1,0,0.f,7.f}
+				},
+				{
+					{2,1,0,0},
+					{0.f,1,.0f,7.f}
+				},
+				{
+					{4,1,0,0},
+					{0.f,0,1.f,7.f}
+				}
 
 	};
 
-	std::vector<DirectionalLight> m_DirectionalLights =
+	const std::vector<DirectionalLight> m_DirectionalLights =
 	{
 		{
 			glm::vec4(-0.3f, -1.0f, -0.3f, 0.0f),
@@ -282,11 +267,13 @@ private:
 	};
 
 
-
 	glm::vec3 spawnPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	size_t m_FramesInFlight{ 2 };
 	uint32_t m_CurrentFrame{ 0 };
 
 	glm::vec2 m_CurrentScreenSize{};
+
+	std::vector<vk::DescriptorSet> m_DescriptorSets{};
+
 };
