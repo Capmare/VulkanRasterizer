@@ -25,11 +25,11 @@ ColorPass::ColorPass(const vk::raii::Device &Device, const vk::PipelineLayout &P
 {
 
     m_GraphicsPipelineFactory = std::make_unique<PipelineFactory>(Device);
-    CreateShaderModules();
+    CreateModules();
     CreateGraphicsPipeline();
 }
 
-void ColorPass::FinalColorPass(const std::vector<vk::raii::ImageView>& ImageView ,int CurrentFrame, glm::uint32_t imageIndex, int width, int height) const {
+void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int CurrentFrame, glm::uint32_t imageIndex, int width, int height) const {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
 
@@ -157,7 +157,7 @@ void ColorPass::CreateGraphicsPipeline() {
         .Build());
 }
 
-void ColorPass::CreateShaderModules() {
+void ColorPass::CreateModules() {
     auto ShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadervert.spv", "shaders/shaderfrag.spv");
     for (auto& shader : ShaderModules) {
         m_ColorShaderModules.emplace_back(std::move(shader));

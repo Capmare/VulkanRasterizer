@@ -29,13 +29,13 @@ public:
     ColorPass& operator=(const ColorPass&) = delete;
     ColorPass& operator=(ColorPass&&) noexcept = delete;
 
-	void FinalColorPass(const std::vector<vk::raii::ImageView> &ImageView, int CurrentFrame, glm::uint32_t imageIndex, int width, int height) const;
+	void DoPass(const std::vector<vk::raii::ImageView> &ImageView, int CurrentFrame, glm::uint32_t imageIndex, int width, int height) const;
 
 	std::pair<vk::Format, vk::Format> m_Format{};
 
 private:
     void CreateGraphicsPipeline();
-	void CreateShaderModules();
+	void CreateModules();
 
 	const vk::raii::Device& m_Device;
 	std::unique_ptr<vk::raii::Pipeline> m_GraphicsPipeline{};

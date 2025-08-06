@@ -31,9 +31,15 @@
 
 #include "Camera.h"
 #include "Passes/ColorPass.h"
+#include "Passes/DepthPass.h"
+#include "Passes/GBufferPass.h"
 
 
 #include "Structs/Lights.h"
+
+static constexpr uint32_t WIDTH = 800;
+static constexpr uint32_t HEIGHT = 600;
+
 
 class VulkanWindow
 {
@@ -45,11 +51,9 @@ public:
 
 	static void FramebufferResizeCallback(GLFWwindow* window,  int width, int height);
 
-
 	void Run();
 
-	static constexpr uint32_t WIDTH = 800;
-	static constexpr uint32_t HEIGHT = 600;
+
 
 	static inline const std::vector<const char*> instanceExtensions = {
 		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -79,15 +83,7 @@ private:
 
 	void DepthPrepass(int width, int height);
 
-	void GBufferPass(int width, int height);
-
 	void RecreateDepthImage(uint32_t width, uint32_t height);
-
-	void GBufferPass(uint32_t imageIndex, int width, int height) const;
-
-	void RecreateGBuffer(uint32_t width, uint32_t height);
-
-	void PrepareGBufferForRead();
 
 	void TransitionForPresentation(uint32_t imageIndex);
 
@@ -116,10 +112,6 @@ private:
 	void CreatePipelineLayout();
 
 	void CreateDepthPrepassPipeline();
-
-	void CreateGBufferPipeline();
-
-	void CreateGBuffer();
 
 	void CreateCommandBuffers();
 
@@ -153,7 +145,6 @@ private:
 	std::unique_ptr<Renderer> m_Renderer{};
 
 	std::unique_ptr<PipelineFactory> m_DepthPipelineFactory{};
-	std::unique_ptr<PipelineFactory> m_GBufferPipelineFactory{};
 
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
 	std::unique_ptr<DepthImageFactory> m_DepthImageFactory{};
@@ -166,7 +157,6 @@ private:
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
 
 	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
-	std::unique_ptr<vk::raii::Pipeline> m_GBufferPipeline{};
 
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore{};
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore{};
@@ -180,8 +170,6 @@ private:
 	bool m_bFrameBufferResized{ false };
 
 	std::vector<vk::ShaderEXT> rawShaders{};
-	std::vector<vk::raii::ShaderModule> m_DepthShaderModules{};
-	std::vector<vk::raii::ShaderModule> m_GBufferShaderModules{};
 
 	std::unique_ptr<vk::raii::Sampler> m_Sampler{};
 
@@ -202,15 +190,6 @@ private:
 
 	std::unique_ptr<MeshFactory> m_MeshFactory{};
 	std::vector<ImageResource> m_ImageResource{};
-
-	// G-buffer images
-	ImageResource m_GBufferDiffuse;
-	ImageResource m_GBufferNormals;
-	ImageResource m_GBufferMaterial;
-
-	VkImageView m_GBufferDiffuseView{};
-	VkImageView m_GBufferNormalsView{};
-	VkImageView m_GBufferMaterialView{};
 
 	BufferInfo m_UniformBufferInfo{};
 	BufferInfo m_PointLightBufferInfo{};
@@ -234,13 +213,14 @@ private:
 	std::unique_ptr<Camera> m_Camera{};
 
 	std::unique_ptr<ColorPass> m_ColorPass{};
+	std::unique_ptr<GBufferPass> m_GBufferPass{};
+	std::unique_ptr<DepthPass> m_DepthPass{};
 
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
 
 	double lastX = 0, lastY = 0;
 	bool firstMouse = true;
-
 
 	const std::vector<PointLight> m_PointLights{
 				{
