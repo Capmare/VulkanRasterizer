@@ -21,7 +21,7 @@ class GBufferPass {
 public:
 
 
-    GBufferPass(const vk::raii::Device& Device, std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& CommandBuffer);
+    GBufferPass(const vk::raii::Device& Device, const std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& CommandBuffer);
     virtual ~GBufferPass() = default;
 
     void PrepareImagesForRead(uint32_t CurrentFrame);

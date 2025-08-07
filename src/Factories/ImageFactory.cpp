@@ -334,14 +334,18 @@ VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Im
         imageView = VK_NULL_HANDLE;
     }
 
+    vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+    nameInfo.pObjectName = Name.c_str();
+    nameInfo.objectType = vk::ObjectType::eImageView;
+    nameInfo.objectHandle = uint64_t(&*imageView);
+
+    device.setDebugUtilsObjectNameEXT(nameInfo);
     ResourceTracker->TrackImageView(imageView,Name);
 
     return imageView;
 }
 
 void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo) {
-
-
     VkImage img = VK_NULL_HANDLE;
     VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
     VmaAllocationCreateInfo vmaAllocationCreateInfo{};

@@ -208,13 +208,12 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 
 	AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
-	VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator) {
-		AllocationTracker->UntrackImageView(m_DepthImageView);
-		vkDestroyImageView(*m_Device,m_DepthImageView,nullptr);
+	VmaAllocatorsDeletionQueue.emplace_back([Allocator, tracker = AllocationTracker, view = m_DepthImageView, image = m_DepthImage, this](VmaAllocator) {
+		tracker->UntrackImageView(view);
+		vkDestroyImageView(*m_Device, view, nullptr);
 
-		AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-		vmaDestroyImage(Allocator,m_DepthImage.image,m_DepthImage.allocation);
-
+		tracker->UntrackAllocation(image.allocation);
+		vmaDestroyImage(Allocator, image.image, image.allocation);
 	});
 }
 

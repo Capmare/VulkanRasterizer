@@ -24,6 +24,10 @@ struct alignas(16)  MVP {
    alignas(16) glm::vec3 cameraPos;
 };
 
+struct alignas(16)  LightSpace {
+    alignas(16) glm::mat4 lightSpaceMatrix;
+};
+
 struct Material {
     int diffuseIdx = -1;
     int normalIdx = -1;

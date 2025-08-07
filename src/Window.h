@@ -34,6 +34,7 @@
 #include "Passes/ColorPass.h"
 #include "Passes/DepthPass.h"
 #include "Passes/GBufferPass.h"
+#include "Passes/ShadowPass.h"
 
 
 #include "Structs/Lights.h"
@@ -54,11 +55,9 @@ public:
 
 	void Run();
 
-
-
 	static inline const std::vector<const char*> instanceExtensions = {
 		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-		VK_KHR_SURFACE_EXTENSION_NAME
+		VK_KHR_SURFACE_EXTENSION_NAME,
 	};
 
 	static inline const std::vector<const char*> validationLayers = {
@@ -105,6 +104,8 @@ private:
 	void Cleanup();
 
 	void UpdateUBO();
+
+	void UpdateShadowUBO();
 
 	void CreateSurface();
 
@@ -168,6 +169,7 @@ private:
 	BufferInfo m_UniformBufferInfo{};
 	BufferInfo m_PointLightBufferInfo{};
 	BufferInfo m_DirectionalLightBufferInfo{};
+	BufferInfo m_ShadowUBOBufferInfo{};
 
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
@@ -185,6 +187,7 @@ private:
 	std::unique_ptr<ColorPass> m_ColorPass{};
 	std::unique_ptr<GBufferPass> m_GBufferPass{};
 	std::unique_ptr<DepthPass> m_DepthPass{};
+	std::unique_ptr<ShadowPass> m_ShadowPass{};
 
 	std::unique_ptr<DescriptorSets> m_DescriptorSets{};
 
