@@ -338,44 +338,9 @@ void VulkanWindow::InitVulkan() {
 		m_SwapChainImages[i].imageAspectFlags = vk::ImageAspectFlagBits::eColor;
 	}
 
-
-	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
-
-	vk::ImageCreateInfo imageInfo{};
-	imageInfo.imageType = vk::ImageType::e2D;
-	imageInfo.extent = vk::Extent3D{ static_cast<uint32_t>(m_SwapChainFactory->Extent.width), static_cast<uint32_t>(m_SwapChainFactory->Extent.height), 1 };
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = depthFormat;
-	imageInfo.tiling = vk::ImageTiling::eOptimal;
-	imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-	imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc ;
-	imageInfo.samples = vk::SampleCountFlagBits::e1;
-	imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-	ImageFactory::CreateImage(m_VmaAllocator,m_DepthImage,imageInfo);
-
-	m_DepthImageView = ImageFactory::CreateImageView(
-			*m_Device,m_DepthImage.image,
-			depthFormat,vk::ImageAspectFlagBits::eDepth,
-			m_AllocationTracker.get(), "DepthImageView"
-			);
-
-	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
-	m_AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
-
-	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
-		m_AllocationTracker->UntrackImageView(m_DepthImageView);
-		vkDestroyImageView(**m_Device,m_DepthImageView,nullptr);
-
-		m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-		vmaDestroyImage(m_VmaAllocator,m_DepthImage.image,m_DepthImage.allocation);
-
-	});
-
-
-	CreateShaderModules();
 	m_DepthPass = std::make_unique<DepthPass>(*m_Device,m_CommandBuffers);
+
+	m_DepthPass->CreateImage(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),m_DepthImageFactory->GetFormat(), m_SwapChainFactory->Extent.width,m_SwapChainFactory->Extent.height);
 
 	m_GBufferPass = std::make_unique<GBufferPass>(*m_Device,m_CommandBuffers);
 	m_GBufferPass->CreateGBuffer(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),m_SwapChainFactory->Extent.width,m_SwapChainFactory->Extent.height);
@@ -399,19 +364,22 @@ void VulkanWindow::InitVulkan() {
 
 	m_DescriptorSets = GetDescriptorSets();
 	m_GBufferPass->m_DescriptorSets = m_DescriptorSets;
+	m_DepthPass->m_DescriptorSets = m_DescriptorSets;
 
 	CreatePipelineLayout();
 	m_GBufferPass->m_PipelineLayout = **m_PipelineLayout;
+	m_DepthPass->m_PipelineLayout = **m_PipelineLayout;
 
 	m_GBufferPass->SetMeshes(m_Meshes);
-	m_DepthPipelineFactory = std::make_unique<PipelineFactory>(*m_Device);
+	m_DepthPass->SetMeshes(m_Meshes);
 
-	CreateDepthPrepassPipeline();
+	std::pair Format = {m_SwapChainFactory->Format.format, m_DepthImageFactory->GetFormat()};
+
+	m_DepthPass->CreatePipeline(m_ImageResource.size(),Format);
 	m_GBufferPass->CreatePipeline(m_ImageResource.size(), m_DepthImageFactory->GetFormat());
 
 	// create color pass
 	std::pair lights = {m_DirectionalLights, m_PointLights};
-	std::pair Format = {m_SwapChainFactory->Format.format, m_DepthImageFactory->GetFormat()};
 	m_ColorPass = std::make_unique<ColorPass>(*m_Device,**m_PipelineLayout,m_CommandBuffers,m_DescriptorSets,lights,Format);
 
 	CreateCommandBuffers();
@@ -445,15 +413,15 @@ void VulkanWindow::DrawFrame() {
 
     TransitionInitialLayouts(imageIndex);
 
-	m_DepthPass->DoPass(width,height);
+	m_DepthPass->DoPass(m_CurrentFrame,width,height);
 
-	m_GBufferPass->DoPass(m_DepthImageView,m_CurrentFrame, width, height);
+	m_GBufferPass->DoPass(m_DepthPass->GetImageView(),m_CurrentFrame, width, height);
 
 	m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
 	ImageFactory::ShiftImageLayout(
 		*m_CommandBuffers[m_CurrentFrame],
-		m_DepthImage,
+		m_DepthPass->GetImage(),
 		vk::ImageLayout::eReadOnlyOptimal,
 		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
 		vk::AccessFlagBits::eShaderRead,
@@ -495,8 +463,10 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 
 	auto transitionCmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
 	transitionCmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
 	m_GBufferPass->ShiftLayout(transitionCmd);
-	TransitionNewAttachments(transitionCmd);
+	m_DepthPass->ShiftLayout(transitionCmd);
+
 	transitionCmd.end();
 
 	vk::SubmitInfo submitInfo{};
@@ -507,7 +477,7 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 	m_GraphicsQueue->submit(submitInfo, VK_NULL_HANDLE);
 	m_GraphicsQueue->waitIdle();
 
-	RecreateDepthImage(width, height);
+	m_DepthPass->RecreateImage(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),std::get<1>(m_DepthPass->GetFormat()),width,height);
 	m_GBufferPass->RecreateGBuffer(m_VmaAllocator,m_AllocationTracker.get(),width,height);
 
 	CreateDescriptorPools();
@@ -548,64 +518,6 @@ void VulkanWindow::TransitionInitialLayouts(uint32_t imageIndex) {
         vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput);
 }
 
-void VulkanWindow::TransitionNewAttachments(const vk::CommandBuffer& cmd) {
-	ImageFactory::ShiftImageLayout(
-		cmd,
-		m_DepthImage,
-		vk::ImageLayout::eDepthAttachmentOptimal,
-		vk::AccessFlagBits::eNone,
-		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-		vk::PipelineStageFlagBits::eTopOfPipe,
-		vk::PipelineStageFlagBits::eEarlyFragmentTests
-	);
-
-}
-
-
-void VulkanWindow::DepthPrepass(int width, int height) {
-
-
-}
-
-
-void VulkanWindow::RecreateDepthImage(uint32_t width, uint32_t height) {
-	// Destroy old depth image resources
-	m_AllocationTracker->UntrackImageView(m_DepthImageView);
-	vkDestroyImageView(**m_Device, m_DepthImageView, nullptr);
-
-	m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-	vmaDestroyImage(m_VmaAllocator, m_DepthImage.image, m_DepthImage.allocation);
-
-	// Create new depth image with updated size
-	vk::Format depthFormat = m_DepthImageFactory->GetFormat();
-
-	vk::ImageCreateInfo imageInfo{};
-	imageInfo.imageType = vk::ImageType::e2D;
-	imageInfo.extent = vk::Extent3D{width, height, 1};
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = depthFormat;
-	imageInfo.tiling = vk::ImageTiling::eOptimal;
-	imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-	imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc;
-	imageInfo.samples = vk::SampleCountFlagBits::e1;
-	imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-	ImageFactory::CreateImage(m_VmaAllocator, m_DepthImage, imageInfo);
-
-	// Create new image view
-	m_DepthImageView = ImageFactory::CreateImageView(
-		*m_Device,
-		m_DepthImage.image,
-		depthFormat,
-		vk::ImageAspectFlagBits::eDepth,
-		m_AllocationTracker.get(),
-		"DepthImageView"
-	);
-
-	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
-	m_AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
-}
 
 void VulkanWindow::TransitionForPresentation(uint32_t imageIndex) {
     ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
@@ -700,8 +612,9 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
 
 	auto ImageViews = m_GBufferPass->GetImageViews();
-	// Allocate descriptor set
+
 	vk::DescriptorSetAllocateInfo FrameAllocInfo{};
+	// Allocate descriptor set
 	FrameAllocInfo.descriptorPool = *m_DescriptorPool;
 	FrameAllocInfo.descriptorSetCount = 2;
 	FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
@@ -731,7 +644,7 @@ void VulkanWindow::CreateFrameDescriptorSets() {
 
 	vk::DescriptorImageInfo DepthImageInfo{};
 	DepthImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-	DepthImageInfo.imageView = m_DepthImageView;
+	DepthImageInfo.imageView = m_DepthPass->GetImageView();
 	DepthImageInfo.sampler = nullptr;
 
 
@@ -879,98 +792,6 @@ void VulkanWindow::CreatePipelineLayout() {
 
 }
 
-void VulkanWindow::CreateDepthPrepassPipeline() {
-
-    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = vk::CompareOp::eLess;
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_FALSE;
-
-
-	uint32_t textureCount = static_cast<uint32_t>(m_ImageResource.size());
-
-	vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
-
-	// Data buffer holding the value
-	vk::SpecializationInfo specializationInfo;
-	specializationInfo.mapEntryCount = 1;
-	specializationInfo.pMapEntries = &specializationEntry;
-	specializationInfo.dataSize = sizeof(textureCount);
-	specializationInfo.pData = &textureCount;
-
-    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
-	colorBlendAttachment.colorWriteMask =
-		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-    colorBlendAttachment.blendEnable = VK_FALSE;
-
-    // Multisampling
-    vk::PipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
-
-    // Rasterizer (same as usual)
-    vk::PipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.depthClampEnable = VK_FALSE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = vk::PolygonMode::eFill;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
-    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-    rasterizer.depthBiasEnable = VK_FALSE;
-
-    // Input assembly
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-    vk::PipelineShaderStageCreateInfo vertexStageInfo{};
-    vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
-    vertexStageInfo.setModule(*m_DepthShaderModules[0]); // vertex shader module
-    vertexStageInfo.setPName("main");
-
-	vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
-	fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
-	fragmentStageInfo.setModule(*m_DepthShaderModules[1]); // vertex shader module
-	fragmentStageInfo.setPName("main");
-	fragmentStageInfo.pSpecializationInfo = &specializationInfo;
-
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
-
-    vk::PipelineViewportStateCreateInfo viewportState{};
-    viewportState.viewportCount = 1;
-    viewportState.pViewports = nullptr;
-    viewportState.scissorCount = 1;
-    viewportState.pScissors = nullptr;
-
-    vk::Format depthFormat = m_DepthImageFactory->GetFormat();
-
-    m_DepthPrepassPipeline = std::make_unique<vk::raii::Pipeline>(m_DepthPipelineFactory
-        ->SetShaderStages(shaderStages)
-        .SetVertexInput(vertexInputInfo)
-        .SetInputAssembly(inputAssembly)
-        .SetRasterizer(rasterizer)
-        .SetMultisampling(multisampling)
-        .SetColorBlendAttachments({colorBlendAttachment})
-        .SetViewportState(viewportState)
-        .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
-        .SetDepthStencil(depthStencil)
-        .SetLayout(*m_PipelineLayout)
-        .SetColorFormats({m_SwapChainFactory->Format.format})
-        .SetDepthFormat(depthFormat)
-        .Build());
-}
 
 void VulkanWindow::CreateCommandBuffers() {
 	for (size_t frames{}; frames < m_FramesInFlight; ++frames) {

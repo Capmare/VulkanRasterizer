@@ -79,12 +79,6 @@ private:
 
 	void TransitionInitialLayouts(uint32_t imageIndex);
 
-	void TransitionNewAttachments(const vk::CommandBuffer &cmd);
-
-	void DepthPrepass(int width, int height);
-
-	void RecreateDepthImage(uint32_t width, uint32_t height);
-
 	void TransitionForPresentation(uint32_t imageIndex);
 
 	void EndCommandBuffer() const;
@@ -105,13 +99,9 @@ private:
 
 	void CreateFrameDescriptorSets();
 
-	void CreateShaderModules();
-
 	void CreateDescriptorSets();
 
 	void CreatePipelineLayout();
-
-	void CreateDepthPrepassPipeline();
 
 	void CreateCommandBuffers();
 
@@ -135,7 +125,6 @@ private:
 
 	void ProcessInput(GLFWwindow *window, float deltaTime);
 
-
 	GLFWwindow* m_Window{};
 
 	std::unique_ptr<InstanceFactory> m_InstanceFactory{};
@@ -143,8 +132,6 @@ private:
 	std::unique_ptr<LogicalDeviceFactory> m_LogicalDeviceFactory{};
 	std::unique_ptr<SwapChainFactory> m_SwapChainFactory{};
 	std::unique_ptr<Renderer> m_Renderer{};
-
-	std::unique_ptr<PipelineFactory> m_DepthPipelineFactory{};
 
 	std::unique_ptr<DescriptorSetFactory> m_DescriptorSetFactory{};
 	std::unique_ptr<DepthImageFactory> m_DepthImageFactory{};
@@ -156,15 +143,12 @@ private:
 	std::unique_ptr<vk::raii::SwapchainKHR> m_SwapChain{};
 	std::unique_ptr<vk::raii::Queue> m_GraphicsQueue{};
 
-	std::unique_ptr<vk::raii::Pipeline> m_DepthPrepassPipeline{};
-
 	std::unique_ptr<vk::raii::Semaphore> m_ImageAvailableSemaphore{};
 	std::unique_ptr<vk::raii::Semaphore> m_RenderFinishedSemaphore{};
 	std::unique_ptr<vk::raii::Fence> m_RenderFinishedFence{};
 
 	vk::SurfaceKHR m_Surface{};
 	std::vector<ImageResource> m_SwapChainImages{};
-	ImageResource m_DepthImage{};
 
 	vk::raii::Context m_Context{};
 	bool m_bFrameBufferResized{ false };
@@ -207,7 +191,6 @@ private:
 	std::unique_ptr<Buffer> m_Buffer{};
 
 
-	vk::ImageView m_DepthImageView{};
 	std::vector<vk::ImageView> m_SwapChainImageViews{};
 
 	std::unique_ptr<Camera> m_Camera{};

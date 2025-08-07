@@ -60,6 +60,7 @@ private:
 
 
     std::vector<Mesh> m_Meshes;
+
     // G-buffer images
     ImageResource m_GBufferDiffuse;
     ImageResource m_GBufferNormals;
