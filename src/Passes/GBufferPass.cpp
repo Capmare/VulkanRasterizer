@@ -51,6 +51,45 @@ void GBufferPass::PrepareImagesForRead(uint32_t CurrentFrame) {
 
 }
 
+
+void GBufferPass::WindowResizeShiftLayout(const vk::raii::CommandBuffer& command_buffer) {
+	using AF = vk::AccessFlagBits;
+	using PS = vk::PipelineStageFlagBits;
+
+	ImageFactory::ShiftImageLayout(
+		*command_buffer,
+		m_GBufferDiffuse,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		AF::eNone,
+		AF::eColorAttachmentWrite,
+		PS::eTopOfPipe,
+		PS::eColorAttachmentOutput
+	);
+
+	ImageFactory::ShiftImageLayout(
+		*command_buffer,
+		m_GBufferNormals,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		AF::eNone,
+		AF::eColorAttachmentWrite,
+		PS::eTopOfPipe,
+		PS::eColorAttachmentOutput
+	);
+
+	ImageFactory::ShiftImageLayout(
+		*command_buffer,
+		m_GBufferMaterial,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		AF::eNone,
+		AF::eColorAttachmentWrite,
+		PS::eTopOfPipe,
+		PS::eColorAttachmentOutput
+	);
+}
+
+
+
+
 void GBufferPass::ShiftLayout(const vk::raii::CommandBuffer &command_buffer) {
 	ImageFactory::ShiftImageLayout(
 	command_buffer,
@@ -61,6 +100,16 @@ void GBufferPass::ShiftLayout(const vk::raii::CommandBuffer &command_buffer) {
 	vk::PipelineStageFlagBits::eTopOfPipe,
 	vk::PipelineStageFlagBits::eColorAttachmentOutput
 );
+
+	ImageFactory::ShiftImageLayout(
+		command_buffer,
+		m_GBufferDiffuse,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		vk::AccessFlagBits::eNone,
+		vk::AccessFlagBits::eColorAttachmentWrite,
+		vk::PipelineStageFlagBits::eTopOfPipe,
+		vk::PipelineStageFlagBits::eColorAttachmentOutput
+	);
 
 	ImageFactory::ShiftImageLayout(
 		command_buffer,
@@ -105,7 +154,10 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,std::deque<std::function<
         imageInfo.samples = vk::SampleCountFlagBits::e1;
         imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
+
         ImageFactory::CreateImage(Allocator, m_GBufferDiffuse, imageInfo);
+
+
 		vk::DebugUtilsObjectNameInfoEXT nameInfo{};
 		nameInfo.pObjectName = "GBuffer.Diffuse";
 		nameInfo.objectType = vk::ObjectType::eImage;

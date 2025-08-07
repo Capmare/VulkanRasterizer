@@ -13,6 +13,24 @@ DepthPass::DepthPass(const vk::raii::Device &Device,
 	CreateModules();
 }
 
+
+void DepthPass::WindowResizeShiftLayout(const vk::raii::CommandBuffer& command_buffer) {
+	using AF = vk::AccessFlagBits;
+	using PS = vk::PipelineStageFlagBits;
+
+	ImageFactory::ShiftImageLayout(
+		*command_buffer,
+		m_DepthImage,
+		vk::ImageLayout::eDepthStencilReadOnlyOptimal,
+		AF::eNone,
+		AF::eShaderRead,
+		PS::eTopOfPipe,
+		PS::eFragmentShader
+	);
+}
+
+
+
 void DepthPass::ShiftLayout(const vk::raii::CommandBuffer &command_buffer) {
 	ImageFactory::ShiftImageLayout(
 	command_buffer,
@@ -186,6 +204,8 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 			);
 
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
+	m_DepthImage.imageLayout = vk::ImageLayout::eUndefined;
+
 	AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
 	VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator) {
@@ -206,33 +226,8 @@ void DepthPass::RecreateImage(VmaAllocator Allocator,std::deque<std::function<vo
 	AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
 	vmaDestroyImage(Allocator, m_DepthImage.image, m_DepthImage.allocation);
 
-	// Create new depth image with updated size
-	vk::ImageCreateInfo imageInfo{};
-	imageInfo.imageType = vk::ImageType::e2D;
-	imageInfo.extent = vk::Extent3D{width, height, 1};
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = DepthFormat;
-	imageInfo.tiling = vk::ImageTiling::eOptimal;
-	imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-	imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc;
-	imageInfo.samples = vk::SampleCountFlagBits::e1;
-	imageInfo.sharingMode = vk::SharingMode::eExclusive;
+	CreateImage(Allocator,VmaAllocatorsDeletionQueue,AllocationTracker, DepthFormat, width, height);
 
-	ImageFactory::CreateImage(Allocator, m_DepthImage, imageInfo);
-
-	// Create new image view
-	m_DepthImageView = ImageFactory::CreateImageView(
-		m_Device,
-		m_DepthImage.image,
-		DepthFormat,
-		vk::ImageAspectFlagBits::eDepth,
-		AllocationTracker,
-		"DepthImageView"
-	);
-
-	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
-	AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 }
 
 void DepthPass::CreateModules() {

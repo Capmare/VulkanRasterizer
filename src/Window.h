@@ -30,6 +30,7 @@
 #include "Factories/SwapChainFactory.h"
 
 #include "Camera.h"
+#include "DescriptorSets/DescriptorSets.h"
 #include "Passes/ColorPass.h"
 #include "Passes/DepthPass.h"
 #include "Passes/GBufferPass.h"
@@ -87,19 +88,9 @@ private:
 
 	void PresentFrame(uint32_t imageIndex) const;
 
-	std::vector<vk::DescriptorSet> GetDescriptorSets() const;
-
-	void DrawMeshes() const;
-
 	void CreateSemaphoreAndFences();
 
 	void LoadMesh();
-
-	void CreateDescriptorPools();
-
-	void CreateFrameDescriptorSets();
-
-	void CreateDescriptorSets();
 
 	void CreatePipelineLayout();
 
@@ -163,7 +154,6 @@ private:
 	std::unique_ptr<vk::raii::DescriptorSetLayout> m_FrameDescriptorSetLayout{};
 	std::unique_ptr<vk::raii::DescriptorSetLayout> m_GlobalDescriptorSetLayout{};
 
-	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool{};
 	std::unique_ptr<vk::raii::PipelineLayout> m_PipelineLayout{};
 
 	std::vector<vk::raii::ShaderModule> m_ShaderModule{};
@@ -181,23 +171,22 @@ private:
 
 	std::vector<std::unique_ptr<vk::raii::CommandBuffer>> m_CommandBuffers{};
 
-	std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets{};
-    std::unique_ptr<vk::raii::DescriptorSets> m_GlobalDescriptorSets{};
-
 	std::vector<Mesh> m_Meshes{};
 
 	std::unique_ptr<ResourceTracker> m_AllocationTracker{};
 
 	std::unique_ptr<Buffer> m_Buffer{};
 
-
 	std::vector<vk::ImageView> m_SwapChainImageViews{};
 
+	// Refactoring
 	std::unique_ptr<Camera> m_Camera{};
 
 	std::unique_ptr<ColorPass> m_ColorPass{};
 	std::unique_ptr<GBufferPass> m_GBufferPass{};
 	std::unique_ptr<DepthPass> m_DepthPass{};
+
+	std::unique_ptr<DescriptorSets> m_DescriptorSets{};
 
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
@@ -237,6 +226,5 @@ private:
 
 	glm::vec2 m_CurrentScreenSize{};
 
-	std::vector<vk::DescriptorSet> m_DescriptorSets{};
 
 };

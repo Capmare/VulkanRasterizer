@@ -358,13 +358,20 @@ void VulkanWindow::InitVulkan() {
 		)
 	);
 
-	CreateDescriptorPools();
-	CreateDescriptorSets();
-	CreateFrameDescriptorSets();
+	m_DescriptorSets = std::make_unique<DescriptorSets>(*m_Device);
+	m_DescriptorSets->CreateGlobalDescriptorSet(
+		**m_GlobalDescriptorSetLayout, *m_Sampler, std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
+		std::make_pair(m_DirectionalLightBufferInfo, static_cast<uint32_t>(m_DirectionalLights.size())),
+		m_ImageResource,
+		m_SwapChainImageViews
+	);
 
-	m_DescriptorSets = GetDescriptorSets();
-	m_GBufferPass->m_DescriptorSets = m_DescriptorSets;
-	m_DepthPass->m_DescriptorSets = m_DescriptorSets;
+
+	m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo);
+
+	m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+	m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+
 
 	CreatePipelineLayout();
 	m_GBufferPass->m_PipelineLayout = **m_PipelineLayout;
@@ -380,7 +387,8 @@ void VulkanWindow::InitVulkan() {
 
 	// create color pass
 	std::pair lights = {m_DirectionalLights, m_PointLights};
-	m_ColorPass = std::make_unique<ColorPass>(*m_Device,**m_PipelineLayout,m_CommandBuffers,m_DescriptorSets,lights,Format);
+	m_ColorPass = std::make_unique<ColorPass>(*m_Device,**m_PipelineLayout,m_CommandBuffers,lights,Format);
+	m_ColorPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 
 	CreateCommandBuffers();
 
@@ -393,7 +401,6 @@ void VulkanWindow::InitVulkan() {
 
 	m_AllocationTracker->PrintAllocations();
 }
-
 
 void VulkanWindow::DrawFrame() {
 
@@ -413,23 +420,33 @@ void VulkanWindow::DrawFrame() {
 
     TransitionInitialLayouts(imageIndex);
 
+	ImageFactory::ShiftImageLayout(
+	   *m_CommandBuffers[m_CurrentFrame],
+	   	m_DepthPass->GetImage(),
+	   vk::ImageLayout::eDepthStencilAttachmentOptimal,
+	   vk::AccessFlagBits::eNone,
+	   vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+	   vk::PipelineStageFlagBits::eTopOfPipe,
+	   vk::PipelineStageFlagBits::eEarlyFragmentTests
+   );
+
 	m_DepthPass->DoPass(m_CurrentFrame,width,height);
 
-	m_GBufferPass->DoPass(m_DepthPass->GetImageView(),m_CurrentFrame, width, height);
+	ImageFactory::ShiftImageLayout(
+	*m_CommandBuffers[m_CurrentFrame],
+		m_DepthPass->GetImage(),
+	   vk::ImageLayout::eDepthReadOnlyOptimal,
+	   vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+	   vk::AccessFlagBits::eShaderRead,
+	   vk::PipelineStageFlagBits::eLateFragmentTests,
+	   vk::PipelineStageFlagBits::eFragmentShader
+   );
 
+
+	m_GBufferPass->DoPass(m_DepthPass->GetImageView(),m_CurrentFrame, width, height);
 	m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
-	ImageFactory::ShiftImageLayout(
-		*m_CommandBuffers[m_CurrentFrame],
-		m_DepthPass->GetImage(),
-		vk::ImageLayout::eReadOnlyOptimal,
-		vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-		vk::AccessFlagBits::eShaderRead,
-		vk::PipelineStageFlagBits::eLateFragmentTests,
-		vk::PipelineStageFlagBits::eFragmentShader
-	);
-
-	m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews,m_CurrentFrame,imageIndex,width,height);
+	m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews,static_cast<uint32_t>(m_CurrentFrame),imageIndex,width,height);
 
     TransitionForPresentation(imageIndex);
 
@@ -446,7 +463,8 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
     if (!m_bFrameBufferResized) return;
 
     m_Device->waitIdle();
-    m_SwapChain.reset();
+
+	m_SwapChain.reset();
     m_SwapChainFactory->m_ImageViews.clear();
 
     m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
@@ -461,12 +479,13 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
         m_SwapChainImages[i].imageAspectFlags = vk::ImageAspectFlagBits::eColor;
     }
 
+	m_DepthPass->RecreateImage(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),std::get<1>(m_DepthPass->GetFormat()),width, height);
+	m_GBufferPass->RecreateGBuffer(m_VmaAllocator,m_AllocationTracker.get(),width,height);
+
 	auto transitionCmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
 	transitionCmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-
-	m_GBufferPass->ShiftLayout(transitionCmd);
-	m_DepthPass->ShiftLayout(transitionCmd);
-
+		m_GBufferPass->WindowResizeShiftLayout(transitionCmd);
+		m_DepthPass->WindowResizeShiftLayout(transitionCmd);
 	transitionCmd.end();
 
 	vk::SubmitInfo submitInfo{};
@@ -477,12 +496,20 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 	m_GraphicsQueue->submit(submitInfo, VK_NULL_HANDLE);
 	m_GraphicsQueue->waitIdle();
 
-	m_DepthPass->RecreateImage(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),std::get<1>(m_DepthPass->GetFormat()),width,height);
-	m_GBufferPass->RecreateGBuffer(m_VmaAllocator,m_AllocationTracker.get(),width,height);
 
-	CreateDescriptorPools();
-	CreateFrameDescriptorSets();
-	CreateDescriptorSets();
+
+	m_DescriptorSets->CreateDescriptorPool();
+	m_DescriptorSets->CreateGlobalDescriptorSet(
+		**m_GlobalDescriptorSetLayout, *m_Sampler, std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
+		std::make_pair(m_DirectionalLightBufferInfo, static_cast<uint32_t>(m_DirectionalLights.size())),
+		m_ImageResource,
+		m_SwapChainImageViews
+	);
+	m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo);
+
+	m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+	m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+	m_ColorPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 
     m_bFrameBufferResized = false;
 }
@@ -553,19 +580,6 @@ void VulkanWindow::PresentFrame(uint32_t imageIndex) const {
     m_GraphicsQueue->presentKHR(presentInfo);
 }
 
-std::vector<vk::DescriptorSet> VulkanWindow::GetDescriptorSets() const {
-    return { *(*m_FrameDescriptorSets)[m_CurrentFrame], *(*m_GlobalDescriptorSets)[m_CurrentFrame] };
-}
-
-void VulkanWindow::DrawMeshes() const {
-    for (const auto& mesh : m_Meshes) {
-        m_CommandBuffers[m_CurrentFrame]->bindVertexBuffers(0, {mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
-        m_CommandBuffers[m_CurrentFrame]->bindIndexBuffer(mesh.m_IndexBufferInfo.m_Buffer, 0, vk::IndexType::eUint32);
-        m_CommandBuffers[m_CurrentFrame]->pushConstants(*m_PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, vk::ArrayProxy<const Material>{mesh.m_Material});
-        m_CommandBuffers[m_CurrentFrame]->drawIndexed(mesh.m_IndexCount, 1, 0, 0, 0);
-    }
-}
-
 void VulkanWindow::CreateSemaphoreAndFences() {
 	m_ImageAvailableSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
 	m_RenderFinishedSemaphore = std::make_unique<vk::raii::Semaphore>(*m_Device, vk::SemaphoreCreateInfo());
@@ -581,197 +595,6 @@ void VulkanWindow::LoadMesh() {
 	                                            **m_MeshCmdBuffer,*m_GraphicsQueue,*m_Device,
 	                                            *m_CmdPool,m_ImageResource,
 	                                            m_SwapChainImageViews, m_AllocationTracker.get());
-}
-
-void VulkanWindow::CreateDescriptorPools() {
-	vk::DescriptorPoolSize UboPoolSize{};
-	UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
-	UboPoolSize.descriptorCount = 2;
-
-	vk::DescriptorPoolSize SamplerPoolSize{};
-	SamplerPoolSize.type = vk::DescriptorType::eSampler;
-	SamplerPoolSize.descriptorCount = 2;
-
-	vk::DescriptorPoolSize TexturesPoolSize{};
-	TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-	TexturesPoolSize.descriptorCount = 12;
-
-	vk::DescriptorPoolSize PoolSizeArr[] = { UboPoolSize, SamplerPoolSize, TexturesPoolSize };
-
-	vk::DescriptorPoolCreateInfo poolInfo{};
-	poolInfo.maxSets = 4;
-	poolInfo.poolSizeCount = 3;
-	poolInfo.pPoolSizes = PoolSizeArr;
-	poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-
-	m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(std::move(m_Device->createDescriptorPool(poolInfo)));
-}
-
-void VulkanWindow::CreateFrameDescriptorSets() {
-
-	vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {**m_FrameDescriptorSetLayout, **m_FrameDescriptorSetLayout};
-
-	auto ImageViews = m_GBufferPass->GetImageViews();
-
-	vk::DescriptorSetAllocateInfo FrameAllocInfo{};
-	// Allocate descriptor set
-	FrameAllocInfo.descriptorPool = *m_DescriptorPool;
-	FrameAllocInfo.descriptorSetCount = 2;
-	FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
-
-	m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,FrameAllocInfo);
-
-	// Descriptor buffer info (uniform buffer)
-	vk::DescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = m_UniformBufferInfo.m_Buffer;
-	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(MVP);
-
-	vk::DescriptorImageInfo DiffuseImageInfo{};
-	DiffuseImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-	DiffuseImageInfo.imageView = std::get<0>(ImageViews);
-	DiffuseImageInfo.sampler = nullptr;
-
-	vk::DescriptorImageInfo NormalImageInfo{};
-	NormalImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-	NormalImageInfo.imageView = std::get<1>(ImageViews);
-	NormalImageInfo.sampler = nullptr;
-
-	vk::DescriptorImageInfo MaterialImageInfo{};
-	MaterialImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-	MaterialImageInfo.imageView = std::get<2>(ImageViews);
-	MaterialImageInfo.sampler = nullptr;
-
-	vk::DescriptorImageInfo DepthImageInfo{};
-	DepthImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-	DepthImageInfo.imageView = m_DepthPass->GetImageView();
-	DepthImageInfo.sampler = nullptr;
-
-
-	for (auto& ds : *m_FrameDescriptorSets) {
-		vk::WriteDescriptorSet writeInfo{};
-
-		writeInfo.dstSet          = ds;
-		writeInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
-		writeInfo.descriptorCount = static_cast<uint32_t>(1);
-		writeInfo.pImageInfo      = nullptr;
-		writeInfo.pBufferInfo     = &bufferInfo;
-
-		vk::WriteDescriptorSet textureDiffuse{};
-		textureDiffuse.dstSet = ds;
-		textureDiffuse.descriptorType = vk::DescriptorType::eSampledImage;
-		textureDiffuse.descriptorCount = static_cast<uint32_t>(1);
-		textureDiffuse.pImageInfo      = &DiffuseImageInfo;
-		textureDiffuse.dstBinding	  = 1;
-		textureDiffuse.pBufferInfo     = nullptr;
-
-		vk::WriteDescriptorSet textureNormal{};
-		textureNormal.dstSet = ds;
-		textureNormal.descriptorType = vk::DescriptorType::eSampledImage;
-		textureNormal.descriptorCount = static_cast<uint32_t>(1);
-		textureNormal.pImageInfo      = &NormalImageInfo;
-		textureNormal.dstBinding	  = 2;
-		textureNormal.pBufferInfo     = nullptr;
-
-		vk::WriteDescriptorSet textureMaterial{};
-		textureMaterial.dstSet = ds;
-		textureMaterial.descriptorType = vk::DescriptorType::eSampledImage;
-		textureMaterial.descriptorCount = static_cast<uint32_t>(1);
-		textureMaterial.pImageInfo      = &MaterialImageInfo;
-		textureMaterial.dstBinding	  = 3;
-		textureMaterial.pBufferInfo     = nullptr;
-
-		vk::WriteDescriptorSet textureDepth{};
-		textureDepth.dstSet = ds;
-		textureDepth.descriptorType = vk::DescriptorType::eSampledImage;
-		textureDepth.descriptorCount = static_cast<uint32_t>(1);
-		textureDepth.pImageInfo      = &DepthImageInfo;
-		textureDepth.dstBinding	  = 4;
-		textureDepth.pBufferInfo     = nullptr;
-
-
-		m_Device->updateDescriptorSets({writeInfo,textureDiffuse,textureNormal,textureMaterial, textureDepth}, nullptr);
-
-
-	}
-}
-
-void VulkanWindow::CreateDescriptorSets() {
-	// global descriptor set
-	vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {**m_GlobalDescriptorSetLayout, **m_GlobalDescriptorSetLayout};
-
-	vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
-	GlobalAllocInfo.descriptorPool = *m_DescriptorPool;
-	GlobalAllocInfo.descriptorSetCount = 2;
-	GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
-
-	m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(*m_Device,GlobalAllocInfo);
-
-	vk::DescriptorImageInfo SamplerInfo{};
-	SamplerInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-	SamplerInfo.imageView = VK_NULL_HANDLE;
-	SamplerInfo.sampler = *m_Sampler;
-
-
-	vk::DescriptorBufferInfo LightBufferInfo{};
-	LightBufferInfo.buffer = m_PointLightBufferInfo.m_Buffer;
-	LightBufferInfo.offset = 0;
-	LightBufferInfo.range = sizeof(PointLight) * m_PointLights.size();
-
-	vk::DescriptorBufferInfo DirectionalLightBufferInfo{};
-	DirectionalLightBufferInfo.buffer = m_DirectionalLightBufferInfo.m_Buffer;
-	DirectionalLightBufferInfo.offset = 0;
-	DirectionalLightBufferInfo.range = sizeof(DirectionalLight) * m_DirectionalLights.size();
-
-	for (auto& ds: *m_GlobalDescriptorSets) {
-		std::vector<vk::WriteDescriptorSet> descriptorWrites{};
-		descriptorWrites.emplace_back();
-
-		descriptorWrites[0].dstSet = ds;
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = vk::DescriptorType::eSampler;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pImageInfo = &SamplerInfo;
-
-		std::vector<vk::DescriptorImageInfo> DescriptorImgInfos{};
-		for (auto [i, img] : m_ImageResource | std::ranges::views::enumerate) {
-			vk::DescriptorImageInfo descriptorImageInfo{};
-			descriptorImageInfo.imageLayout = img.imageLayout;
-			descriptorImageInfo.imageView = m_SwapChainImageViews[i];
-
-			DescriptorImgInfos.emplace_back(descriptorImageInfo);
-		}
-
-		descriptorWrites.emplace_back();
-		descriptorWrites[1].dstSet = ds;
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = vk::DescriptorType::eSampledImage;
-		descriptorWrites[1].descriptorCount = static_cast<uint32_t>(DescriptorImgInfos.size());
-		descriptorWrites[1].pImageInfo = DescriptorImgInfos.data();
-
-		descriptorWrites.emplace_back();
-		descriptorWrites[2].dstSet = ds;
-		descriptorWrites[2].dstBinding = 2;
-		descriptorWrites[2].dstArrayElement = 0;
-		descriptorWrites[2].descriptorType = vk::DescriptorType::eStorageBuffer;
-		descriptorWrites[2].descriptorCount = 1;
-		descriptorWrites[2].pBufferInfo = &LightBufferInfo;
-
-		descriptorWrites.emplace_back();
-		descriptorWrites[3].dstSet = ds;
-		descriptorWrites[3].dstBinding = 3;
-		descriptorWrites[3].dstArrayElement = 0;
-		descriptorWrites[3].descriptorType = vk::DescriptorType::eStorageBuffer;
-		descriptorWrites[3].descriptorCount = 1;
-		descriptorWrites[3].pBufferInfo = &DirectionalLightBufferInfo;
-
-
-		m_Device->updateDescriptorSets(descriptorWrites, nullptr);
-
-
-	}
 }
 
 void VulkanWindow::CreatePipelineLayout() {
@@ -791,7 +614,6 @@ void VulkanWindow::CreatePipelineLayout() {
 	m_PipelineLayout = std::make_unique<vk::raii::PipelineLayout>(*m_Device, layoutInfo);
 
 }
-
 
 void VulkanWindow::CreateCommandBuffers() {
 	for (size_t frames{}; frames < m_FramesInFlight; ++frames) {

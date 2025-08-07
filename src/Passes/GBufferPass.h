@@ -26,6 +26,8 @@ public:
 
     void PrepareImagesForRead(uint32_t CurrentFrame);
 
+    void WindowResizeShiftLayout(const vk::raii::CommandBuffer &command_buffer);
+
     GBufferPass(const GBufferPass&) = delete;
     GBufferPass(GBufferPass&&) noexcept = delete;
     GBufferPass& operator=(const GBufferPass&) = delete;

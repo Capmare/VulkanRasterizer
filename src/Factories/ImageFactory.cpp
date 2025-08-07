@@ -349,6 +349,7 @@ void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk:
     vmaCreateImage(Allocator, &imgInfo, &vmaAllocationCreateInfo, &img, &Image.allocation, nullptr);
 
     Image.image = img;
+    Image.imageLayout = vk::ImageLayout::eUndefined;
 }
 
 void ImageFactory::ShiftImageLayout(

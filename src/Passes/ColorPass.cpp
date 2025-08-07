@@ -12,13 +12,11 @@
 
 ColorPass::ColorPass(const vk::raii::Device &Device, const vk::PipelineLayout &PipelineLayout,
     const std::vector<std::unique_ptr<vk::raii::CommandBuffer>> &CommandBuffer,
-    const std::vector<vk::DescriptorSet> &DescriptorSet,
     const std::pair<std::vector<DirectionalLight>, std::vector<PointLight>>& LightData,
     const std::pair<vk::Format, vk::Format>& ColorDepthFormat
     )   : m_Device(Device)
         , m_PipelineLayout(PipelineLayout)
         , m_CommandBuffer(CommandBuffer)
-        , m_DescriptorSets(DescriptorSet)
         , m_LightData(LightData)
         , m_Format(ColorDepthFormat)
 

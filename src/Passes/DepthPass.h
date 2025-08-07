@@ -14,7 +14,9 @@
 
 class DepthPass {
 public:
-    DepthPass(const vk::raii::Device& Device, std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& CommandBuffer);;
+    DepthPass(const vk::raii::Device& Device, std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& CommandBuffer);
+
+    void WindowResizeShiftLayout(const vk::raii::CommandBuffer &command_buffer);;
     virtual ~DepthPass() = default;
 
     void ShiftLayout(const vk::raii::CommandBuffer & command_buffer);
@@ -34,7 +36,8 @@ public:
 	                 AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t height);
 
 	void RecreateImage(VmaAllocator Allocator, std::deque<std::function<void(VmaAllocator)>> &VmaAllocatorsDeletionQueue, ResourceTracker *
-	                   AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t height);
+	                   AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
+	                   height);
 
 	std::vector<vk::DescriptorSet> m_DescriptorSets;
 	vk::PipelineLayout m_PipelineLayout;
