@@ -27,7 +27,7 @@ ColorPass::ColorPass(const vk::raii::Device &Device, const vk::PipelineLayout &P
     CreateGraphicsPipeline();
 }
 
-void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int CurrentFrame, glm::uint32_t imageIndex, int width, int height) const {
+void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int CurrentFrame, uint32_t imageIndex, int width, int height) const {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
 

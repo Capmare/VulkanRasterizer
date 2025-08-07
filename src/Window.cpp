@@ -442,11 +442,10 @@ void VulkanWindow::DrawFrame() {
 	   vk::PipelineStageFlagBits::eFragmentShader
    );
 
-
 	m_GBufferPass->DoPass(m_DepthPass->GetImageView(),m_CurrentFrame, width, height);
 	m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
-	m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews,static_cast<uint32_t>(m_CurrentFrame),imageIndex,width,height);
+	m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews,m_CurrentFrame,imageIndex,width,height);
 
     TransitionForPresentation(imageIndex);
 
