@@ -4,6 +4,8 @@
 
 #include "ShadowPass.h"
 
+#include <ranges>
+
 #include "Factories/ImageFactory.h"
 #include "Factories/ShaderFactory.h"
 
@@ -106,13 +108,13 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
 }
 
 
-void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) {
+void ShadowPass::DoPass(uint32_t LightsIdx, uint32_t CurrentFrame, uint32_t width, uint32_t height) {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {width, height}};
 
     // Depth attachment for shadow map
     vk::RenderingAttachmentInfo depthAttachment{};
-    depthAttachment.setImageView(m_ShadowImageView);
+    depthAttachment.setImageView(m_ShadowImageView[LightsIdx]);
     depthAttachment.setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal);
     depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
     depthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -153,55 +155,23 @@ void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) 
     //  transition shadow map image for sampling
     ImageFactory::ShiftImageLayout(
         *m_CommandBuffer[CurrentFrame],
-        m_ShadowImageResource,
+        m_ShadowImageResource[LightsIdx],
         vk::ImageLayout::eDepthAttachmentOptimal,
         vk::AccessFlagBits::eDepthStencilAttachmentWrite,
         vk::AccessFlagBits::eShaderRead,
         vk::PipelineStageFlagBits::eEarlyFragmentTests,
         vk::PipelineStageFlagBits::eFragmentShader
     );
-
 }
 
 
-void ShadowPass::CreateShadowResources(
-    VmaAllocator allocator,
-    std::deque<std::function<void(VmaAllocator)> > &deletionQueue,
-    ResourceTracker *tracker,
-    uint32_t width,
-    uint32_t height
+void ShadowPass::CreateShadowResources(uint32_t Lights,
+                                       VmaAllocator allocator,
+                                       std::deque<std::function<void(VmaAllocator)> > &deletionQueue,
+                                       ResourceTracker *tracker,
+                                       uint32_t width,
+                                       uint32_t height
 ) {
-    vk::ImageCreateInfo imageInfo{};
-    imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.extent.width = width;
-    imageInfo.extent.height = height;
-    imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = vk::Format::eD32Sfloat;
-    imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
-                      vk::ImageUsageFlagBits::eSampled;
-    imageInfo.samples = vk::SampleCountFlagBits::e1;
-    imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-    ImageFactory::CreateImage(m_Device,allocator, m_ShadowImageResource, imageInfo, "Shadow Image");
-
-
-    if (tracker) tracker->TrackAllocation(m_ShadowImageResource.allocation, "ShadowMap");
-
-    // Create image view
-    vk::ImageViewCreateInfo viewInfo{};
-    viewInfo.image = m_ShadowImageResource.image;
-    viewInfo.viewType = vk::ImageViewType::e2D;
-    viewInfo.format = vk::Format::eD32Sfloat;
-    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
-
     // Create sampler
     vk::SamplerCreateInfo samplerInfo{};
     samplerInfo.magFilter = vk::Filter::eLinear;
@@ -217,25 +187,69 @@ void ShadowPass::CreateShadowResources(
 
     m_ShadowSampler = std::make_unique<vk::raii::Sampler>(m_Device, samplerInfo);
 
-    m_ShadowImageView = ImageFactory::CreateImageView(
+
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent.width = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = vk::Format::eD32Sfloat;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
+                      vk::ImageUsageFlagBits::eSampled;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+
+    m_ShadowImageResource.resize(Lights);
+
+    for (size_t idx{}; idx < Lights; ++idx) {
+        ImageFactory::CreateImage(m_Device, allocator, m_ShadowImageResource[idx], imageInfo, "Shadow Image");
+
+        if (tracker) tracker->TrackAllocation(m_ShadowImageResource[idx].allocation, "ShadowMap");
+
+        // Create image view
+        vk::ImageViewCreateInfo viewInfo{};
+        viewInfo.image = m_ShadowImageResource[idx].image;
+        viewInfo.viewType = vk::ImageViewType::e2D;
+        viewInfo.format = vk::Format::eD32Sfloat;
+        viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = 1;
+
+
+        m_ShadowImageView.emplace_back(ImageFactory::CreateImageView(
             m_Device,
-            m_ShadowImageResource.image,
+            m_ShadowImageResource[idx].image,
             vk::Format::eD32Sfloat,
             vk::ImageAspectFlagBits::eDepth,
             tracker,
             "ShadowMap"
+        ));
+
+
+        m_ShadowImageResource[idx].imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
+        m_ShadowImageResource[idx].imageLayout = vk::ImageLayout::eUndefined;
+
+        VmaAllocation allocation = m_ShadowImageResource[idx].allocation;
+        VkImage imageHandle = m_ShadowImageResource[idx].image;
+        VkImageView viewHandle = m_ShadowImageView[idx];
+
+        deletionQueue.emplace_back(
+            [allocation, imageHandle, viewHandle, device = *m_Device, tracker = tracker]
+    (VmaAllocator alloc) {
+                // destroy the image view
+                tracker->UntrackImageView(viewHandle);
+                vkDestroyImageView(device, viewHandle, nullptr);
+
+                // destroy the image + free its allocation in one call
+                vmaDestroyImage(alloc, imageHandle, allocation);
+                tracker->UntrackAllocation(allocation);
+            }
         );
-
-
-    m_ShadowImageResource.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
-    m_ShadowImageResource.imageLayout = vk::ImageLayout::eUndefined;
-
-    deletionQueue.emplace_back([=](VmaAllocator alloc) {
-        tracker->UntrackAllocation(m_ShadowImageResource.allocation);
-        vmaDestroyImage(alloc, m_ShadowImageResource.image, m_ShadowImageResource.allocation);
-
-        tracker->UntrackImageView(m_ShadowImageView);
-        vmaDestroyImage(alloc, m_ShadowImageResource.image, m_ShadowImageResource.allocation);
-    });
-
+    }
 }

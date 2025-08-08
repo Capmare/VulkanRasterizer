@@ -27,15 +27,16 @@ public:
 
     void CreatePipeline(uint32_t shadowMapCount, vk::Format format);
 
-    void DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height);
-    void CreateShadowResources(VmaAllocator allocator, std::deque<std::function<void(VmaAllocator)>> &deletionQueue, ResourceTracker *tracker, uint32_t
+    void DoPass(uint32_t LightsIdx, uint32_t CurrentFrame, uint32_t width, uint32_t height);
+    void CreateShadowResources(uint32_t Lights, VmaAllocator allocator, std::deque<std::function<void(VmaAllocator)>> &deletionQueue, ResourceTracker
+                               *tracker, uint32_t
                                width, uint32_t height);
 
     vk::PipelineLayout m_PipelineLayout;
     std::vector<vk::DescriptorSet> m_DescriptorSets;
 
-    VkImageView GetImageView() const { return m_ShadowImageView; };
-	ImageResource& GetImage() { return m_ShadowImageResource; };
+    std::vector<vk::ImageView> GetImageView() const { return m_ShadowImageView; };
+	std::vector<ImageResource> GetImage() const { return m_ShadowImageResource; };
     vk::Sampler GetSampler() const { return **m_ShadowSampler; };
 
     void SetMeshes(const std::vector<Mesh>& Meshes) { m_Meshes = Meshes; };
@@ -45,8 +46,8 @@ private:
     const std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& m_CommandBuffer;
 
 
-    ImageResource m_ShadowImageResource;
-    VkImageView m_ShadowImageView;
+    std::vector<ImageResource> m_ShadowImageResource;
+    std::vector<vk::ImageView> m_ShadowImageView;
     std::unique_ptr<vk::raii::Sampler> m_ShadowSampler;
 
 

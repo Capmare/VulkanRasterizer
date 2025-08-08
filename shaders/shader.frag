@@ -10,6 +10,7 @@ const vec2 SHADOW_TEXEL_SIZE = vec2(1.0 / 1024.0);
 layout (location = 2) in vec2 inTexCoord;
 layout (location = 0) out vec4 outColor;
 
+
 layout (set = 1, binding = 0) uniform sampler texSampler;
 layout (set = 1, binding = 4) uniform samplerShadow shadowSampler;
 layout (constant_id = 0) const uint TEXTURE_COUNT = 1u;
@@ -56,7 +57,8 @@ layout (std140, binding = 5) uniform shadowUBO {
     vec2 NearFarPlanes;
     vec2 _pad1;
 } shadowUbo;
-layout (set = 0, binding = 6) uniform texture2D Shadow;
+
+layout (set = 0, binding = 6) uniform texture2D Shadow[MAX_DIRECTIONAL_LIGHTS];
 
 vec3 Uncharted2Tonemap(vec3 x) {
     float A = 0.15;
@@ -187,17 +189,21 @@ void main() {
         vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+
+
+        vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
+        lightSpacePosition /= lightSpacePosition.w;
+        vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
+        float shadowDepth = texture(sampler2DShadow(Shadow[i],shadowSampler),shadowMapUV).r;
+
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }
 
-    vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
-    lightSpacePosition /= lightSpacePosition.w;
-    vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
-    float shadowDepth = texture(sampler2DShadow(Shadow,shadowSampler),shadowMapUV).r;
+
 
 
     vec3 ambient = vec3(0.03) * albedo;
-    vec3 color = ambient + Lo * shadowDepth;
+    vec3 color = ambient + Lo;
 
     // Gamma correction
     color = ToneMapUncharted2(color);

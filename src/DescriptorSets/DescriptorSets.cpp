@@ -5,30 +5,33 @@
 #include "DescriptorSets.h"
 
 
+
 #include <ranges>
 
 #include "Factories/MeshFactory.h"
 #include "Structs/Lights.h"
 #include "Structs/UBOStructs.h"
 
-void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout &FrameLayout,
-                                              const std::tuple<vk::ImageView, vk::ImageView, vk::ImageView> &
-                                              ColorImageViews, const vk::ImageView &DepthImageView,
-                                              const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo,
-                                              const vk::ImageView &ShadowImageView) {
-    m_FrameDescriptorSets.release();
 
-    vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = {FrameLayout, FrameLayout};
+void DescriptorSets::CreateFrameDescriptorSet(
+    const vk::DescriptorSetLayout &FrameLayout,
+    const std::tuple<vk::ImageView, vk::ImageView, vk::ImageView> &ColorImageViews,
+    const vk::ImageView &DepthImageView,
+    const BufferInfo &UniformBufferInfo,
+    const BufferInfo &ShadowBufferInfo,
+    const std::vector<vk::ImageView> &ShadowImageViews)
+{
+    // Allocate two descriptor sets
+    vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = { FrameLayout, FrameLayout };
 
     vk::DescriptorSetAllocateInfo FrameAllocInfo{};
-    // Allocate descriptor set
     FrameAllocInfo.descriptorPool = *m_DescriptorPool;
     FrameAllocInfo.descriptorSetCount = 2;
     FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
 
     m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(m_Device, FrameAllocInfo);
 
-    // Descriptor buffer info (uniform buffer)
+    // Descriptor buffer info
     vk::DescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = UniformBufferInfo.m_Buffer;
     bufferInfo.offset = 0;
@@ -59,76 +62,96 @@ void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout &Fra
     shadowBufferInfo.offset = 0;
     shadowBufferInfo.range = sizeof(ShadowMVP);
 
-    vk::DescriptorImageInfo ShadowImageInfo{};
-    ShadowImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-    ShadowImageInfo.imageView = ShadowImageView;
-    ShadowImageInfo.sampler = nullptr;
+    std::vector<vk::DescriptorImageInfo> shadowImageInfos;
+    shadowImageInfos.reserve(ShadowImageViews.size());
+    for (const auto& view : ShadowImageViews) {
+        vk::DescriptorImageInfo info{};
+        info.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+        info.imageView = view;
+        info.sampler = nullptr;
+        shadowImageInfos.push_back(info);
+    }
 
-    for (auto &ds: *m_FrameDescriptorSets) {
-        vk::WriteDescriptorSet writeInfo{};
-        writeInfo.dstSet = ds;
-        writeInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
-        writeInfo.descriptorCount = static_cast<uint32_t>(1);
-        writeInfo.pImageInfo = nullptr;
-        writeInfo.pBufferInfo = &bufferInfo;
-        writeInfo.dstBinding = 0;
+    for (auto& ds : *m_FrameDescriptorSets) {
+        std::vector<vk::WriteDescriptorSet> writes;
 
-        vk::WriteDescriptorSet textureDiffuse{};
-        textureDiffuse.dstSet = ds;
-        textureDiffuse.descriptorType = vk::DescriptorType::eSampledImage;
-        textureDiffuse.descriptorCount = static_cast<uint32_t>(1);
-        textureDiffuse.pImageInfo = &DiffuseImageInfo;
-        textureDiffuse.dstBinding = 1;
-        textureDiffuse.pBufferInfo = nullptr;
+        // Uniform buffer
+        vk::WriteDescriptorSet writeUBO{};
+        writeUBO.dstSet = ds;
+        writeUBO.dstBinding = 0;
+        writeUBO.dstArrayElement = 0;
+        writeUBO.descriptorCount = 1;
+        writeUBO.descriptorType = vk::DescriptorType::eUniformBuffer;
+        writeUBO.pBufferInfo = &bufferInfo;
+        writes.push_back(writeUBO);
 
-        vk::WriteDescriptorSet textureNormal{};
-        textureNormal.dstSet = ds;
-        textureNormal.descriptorType = vk::DescriptorType::eSampledImage;
-        textureNormal.descriptorCount = static_cast<uint32_t>(1);
-        textureNormal.pImageInfo = &NormalImageInfo;
-        textureNormal.dstBinding = 2;
-        textureNormal.pBufferInfo = nullptr;
+        // Diffuse texture
+        vk::WriteDescriptorSet writeDiffuse{};
+        writeDiffuse.dstSet = ds;
+        writeDiffuse.dstBinding = 1;
+        writeDiffuse.dstArrayElement = 0;
+        writeDiffuse.descriptorCount = 1;
+        writeDiffuse.descriptorType = vk::DescriptorType::eSampledImage;
+        writeDiffuse.pImageInfo = &DiffuseImageInfo;
+        writes.push_back(writeDiffuse);
 
-        vk::WriteDescriptorSet textureMaterial{};
-        textureMaterial.dstSet = ds;
-        textureMaterial.descriptorType = vk::DescriptorType::eSampledImage;
-        textureMaterial.descriptorCount = static_cast<uint32_t>(1);
-        textureMaterial.pImageInfo = &MaterialImageInfo;
-        textureMaterial.dstBinding = 3;
-        textureMaterial.pBufferInfo = nullptr;
+        // Normal texture
+        vk::WriteDescriptorSet writeNormal{};
+        writeNormal.dstSet = ds;
+        writeNormal.dstBinding = 2;
+        writeNormal.dstArrayElement = 0;
+        writeNormal.descriptorCount = 1;
+        writeNormal.descriptorType = vk::DescriptorType::eSampledImage;
+        writeNormal.pImageInfo = &NormalImageInfo;
+        writes.push_back(writeNormal);
 
-        vk::WriteDescriptorSet textureDepth{};
-        textureDepth.dstSet = ds;
-        textureDepth.descriptorType = vk::DescriptorType::eSampledImage;
-        textureDepth.descriptorCount = static_cast<uint32_t>(1);
-        textureDepth.pImageInfo = &DepthImageInfo;
-        textureDepth.dstBinding = 4;
-        textureDepth.pBufferInfo = nullptr;
+        // Material texture
+        vk::WriteDescriptorSet writeMaterial{};
+        writeMaterial.dstSet = ds;
+        writeMaterial.dstBinding = 3;
+        writeMaterial.dstArrayElement = 0;
+        writeMaterial.descriptorCount = 1;
+        writeMaterial.descriptorType = vk::DescriptorType::eSampledImage;
+        writeMaterial.pImageInfo = &MaterialImageInfo;
+        writes.push_back(writeMaterial);
 
-        vk::WriteDescriptorSet ShadowWriteInfo{};
-        ShadowWriteInfo.dstSet = ds;
-        ShadowWriteInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
-        ShadowWriteInfo.descriptorCount = static_cast<uint32_t>(1);
-        ShadowWriteInfo.pImageInfo = nullptr;
-        ShadowWriteInfo.pBufferInfo = &shadowBufferInfo;
-        ShadowWriteInfo.dstBinding = 5;
+        // Depth texture
+        vk::WriteDescriptorSet writeDepth{};
+        writeDepth.dstSet = ds;
+        writeDepth.dstBinding = 4;
+        writeDepth.dstArrayElement = 0;
+        writeDepth.descriptorCount = 1;
+        writeDepth.descriptorType = vk::DescriptorType::eSampledImage;
+        writeDepth.pImageInfo = &DepthImageInfo;
+        writes.push_back(writeDepth);
 
-        vk::WriteDescriptorSet textureShadow{};
-        textureShadow.dstSet = ds;
-        textureShadow.descriptorType = vk::DescriptorType::eSampledImage;
-        textureShadow.descriptorCount = static_cast<uint32_t>(1);
-        textureShadow.pImageInfo = &ShadowImageInfo;
-        textureShadow.dstBinding = 6;
-        textureShadow.pBufferInfo = nullptr;
+        // Shadow UBO
+        vk::WriteDescriptorSet writeShadowUBO{};
+        writeShadowUBO.dstSet = ds;
+        writeShadowUBO.dstBinding = 5;
+        writeShadowUBO.dstArrayElement = 0;
+        writeShadowUBO.descriptorCount = 1;
+        writeShadowUBO.descriptorType = vk::DescriptorType::eUniformBuffer;
+        writeShadowUBO.pBufferInfo = &shadowBufferInfo;
+        writes.push_back(writeShadowUBO);
 
-        m_Device.updateDescriptorSets({
-                                          writeInfo, textureDiffuse, textureNormal, textureMaterial, textureDepth,
-                                          ShadowWriteInfo, textureShadow
-                                      }, nullptr);
+        // Shadow texture array
+        vk::WriteDescriptorSet writeShadowTextures{};
+        writeShadowTextures.dstSet = ds;
+        writeShadowTextures.dstBinding = 6;
+        writeShadowTextures.dstArrayElement = 0;
+        writeShadowTextures.descriptorCount = static_cast<uint32_t>(shadowImageInfos.size());
+        writeShadowTextures.descriptorType = vk::DescriptorType::eSampledImage;
+        writeShadowTextures.pImageInfo = shadowImageInfos.data();
+        writes.push_back(writeShadowTextures);
+
+        m_Device.updateDescriptorSets(writes, {});
     }
 }
 
-void DescriptorSets::CreateDescriptorPool() {
+
+
+void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
     vk::DescriptorPoolSize UboPoolSize{};
     UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
     UboPoolSize.descriptorCount = 4;
@@ -139,7 +162,7 @@ void DescriptorSets::CreateDescriptorPool() {
 
     vk::DescriptorPoolSize TexturesPoolSize{};
     TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-    TexturesPoolSize.descriptorCount = 14;
+    TexturesPoolSize.descriptorCount = 12 + DirectionalLights;
 
     vk::DescriptorPoolSize PoolSizeArr[] = {UboPoolSize, SamplerPoolSize, TexturesPoolSize};
 
@@ -150,7 +173,6 @@ void DescriptorSets::CreateDescriptorPool() {
     poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
 
     m_Device.waitIdle();
-    m_DescriptorPool.release();
     m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(m_Device.createDescriptorPool(poolInfo));
 }
 
@@ -161,7 +183,6 @@ void DescriptorSets::CreateGlobalDescriptorSet(
     const std::vector<vk::ImageView> &SwapchainImageViews,
     const vk::Sampler &ShadowSampler
 ) {
-    m_GlobalDescriptorSets.release();
 
     // global descriptor set
     vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {GlobalLayout, GlobalLayout};

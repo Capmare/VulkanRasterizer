@@ -16,7 +16,6 @@ class DescriptorSets {
 
     public:
     DescriptorSets(const vk::raii::Device& Device) : m_Device(Device) {
-        CreateDescriptorPool();
     };
     virtual ~DescriptorSets() = default;
 
@@ -25,11 +24,12 @@ class DescriptorSets {
     DescriptorSets& operator=(const DescriptorSets&) = delete;
     DescriptorSets& operator=(DescriptorSets&&) noexcept = delete;
 
-    void CreateDescriptorPool();
+    void CreateDescriptorPool(uint32_t DirectionalLights);
 
     void CreateFrameDescriptorSet(const ::vk::DescriptorSetLayout &FrameLayout,
                                   const std::tuple<vk::ImageView, vk::ImageView, vk::ImageView> & ColorImageViews, const vk::ImageView &DepthImageView,
-                                  const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo, const vk::ImageView &ShadowImageView);
+                                  const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo, const std::vector<vk::ImageView> &
+                                  ShadowImageView);
 
     void CreateGlobalDescriptorSet(
         const vk::DescriptorSetLayout &GlobalLayout,

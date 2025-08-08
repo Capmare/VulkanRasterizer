@@ -13,7 +13,6 @@
 
 #include "Buffer.h"
 #include "PhysicalDevicePicker.h"
-#include "../cmake-build-release-visual-studio/_deps/assimp-src/code/AssetLib/OpenGEX/OpenGEXStructs.h"
 #include "glm/gtx/transform.hpp"
 #include "Structs/UBOStructs.h"
 
@@ -74,6 +73,7 @@ void VulkanWindow::Cleanup() {
     // Destroy depth image first (RAII)
     m_DepthImageFactory.reset();
 
+
     // Destroy other buffers allocated with VMA manually
     while (!m_VmaAllocatorsDeletionQueue.empty()) {
         m_VmaAllocatorsDeletionQueue.back()(m_VmaAllocator);
@@ -110,9 +110,9 @@ void VulkanWindow::UpdateUBO() {
     Buffer::UploadData(m_UniformBufferInfo, &ubo, sizeof(ubo));
 }
 
-void VulkanWindow::UpdateShadowUBO() {
+void VulkanWindow::UpdateShadowUBO(uint32_t LightIdx) {
     // use the first directional light in your array
-    glm::vec3 lightDir = glm::normalize(glm::vec3(m_DirectionalLights[0].Direction));
+    glm::vec3 lightDir = glm::normalize(glm::vec3(m_DirectionalLights[LightIdx].Direction));
 
     glm::vec3 sceneMin, sceneMax;
     std::tie(sceneMin, sceneMax) = VulkanMath::ComputeSceneAABB(m_Meshes);
@@ -315,7 +315,7 @@ void VulkanWindow::InitVulkan() {
             .AddBinding(4, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(5, vk::DescriptorType::eUniformBuffer,
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
-            .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
+            .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_DirectionalLights.size())
 
             .Build()
         )
@@ -423,7 +423,9 @@ void VulkanWindow::InitVulkan() {
                                  m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     m_ShadowPass = std::make_unique<ShadowPass>(*m_Device, m_CommandBuffers);
-    m_ShadowPass->CreateShadowResources(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(), m_ShadowResolution.x, m_ShadowResolution.y);
+    m_ShadowPass->CreateShadowResources(static_cast<uint32_t>(m_DirectionalLights.size()), m_VmaAllocator, m_VmaAllocatorsDeletionQueue,
+                                        m_AllocationTracker.get(), static_cast<uint32_t>(m_ShadowResolution.x),
+                                        static_cast<uint32_t>(m_ShadowResolution.y));
 
     LoadMesh();
 
@@ -442,6 +444,7 @@ void VulkanWindow::InitVulkan() {
     );
 
     m_DescriptorSets = std::make_unique<DescriptorSets>(*m_Device);
+    m_DescriptorSets->CreateDescriptorPool(static_cast<uint32_t>(m_DirectionalLights.size()));
     m_DescriptorSets->CreateGlobalDescriptorSet(
         **m_GlobalDescriptorSetLayout, *m_Sampler,
         std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
@@ -484,15 +487,16 @@ void VulkanWindow::InitVulkan() {
     CreateCommandBuffers();
 
 
-    PrepareFrame();
-
-    BeginCommandBuffer();
-    UpdateShadowUBO();
-    m_ShadowPass->DoPass(m_CurrentFrame, m_ShadowResolution.x, m_ShadowResolution.y);
-    EndCommandBuffer();
-    SubmitFrame();
-    uint32_t imageIndex = AcquireSwapchainImage();
-    PresentFrame(imageIndex);
+    for (const auto& [idx, light] : std::ranges::views::enumerate(m_DirectionalLights)) {
+        PrepareFrame();
+        BeginCommandBuffer();
+        UpdateShadowUBO(static_cast<uint32_t>(idx));
+        m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x), static_cast<uint32_t>(m_ShadowResolution.y));
+        EndCommandBuffer();
+        SubmitFrame();
+        uint32_t imageIndex = AcquireSwapchainImage();
+        PresentFrame(imageIndex);
+    }
 
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
@@ -551,15 +555,18 @@ void VulkanWindow::DrawFrame() {
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
 
-    ImageFactory::ShiftImageLayout(
-        *m_CommandBuffers[m_CurrentFrame],
-        m_ShadowPass->GetImage(),
-        vk::ImageLayout::eDepthReadOnlyOptimal,
-        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-        vk::AccessFlagBits::eShaderRead,
-        vk::PipelineStageFlagBits::eLateFragmentTests,
-        vk::PipelineStageFlagBits::eFragmentShader
-    );
+    for (auto &img: m_ShadowPass->GetImage()) {
+        ImageFactory::ShiftImageLayout(
+            *m_CommandBuffers[m_CurrentFrame],
+            img,
+            vk::ImageLayout::eDepthReadOnlyOptimal,
+            vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+            vk::AccessFlagBits::eShaderRead,
+            vk::PipelineStageFlagBits::eLateFragmentTests,
+            vk::PipelineStageFlagBits::eFragmentShader
+        );
+    }
+
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
@@ -614,7 +621,7 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
     m_GraphicsQueue->waitIdle();
 
 
-    m_DescriptorSets->CreateDescriptorPool();
+    m_DescriptorSets->CreateDescriptorPool(static_cast<uint32_t>(m_DirectionalLights.size()));
     m_DescriptorSets->CreateGlobalDescriptorSet(
         **m_GlobalDescriptorSetLayout, *m_Sampler,
         std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),

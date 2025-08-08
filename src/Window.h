@@ -109,7 +109,7 @@ private:
 
 	void UpdateUBO();
 
-	void UpdateShadowUBO();
+	void UpdateShadowUBO(uint32_t LightIdx);
 
 	void CreateSurface();
 
@@ -214,14 +214,17 @@ private:
 					{4,1,0,0},
 					{0.f,0,1.f,7.f}
 				}
-
 	};
 
 	const std::vector<DirectionalLight> m_DirectionalLights =
 	{
 		{
 			glm::vec4(-.5f, -.5f, -0.f, 0.0f),
-			glm::vec4(1.0f, 0.95f, 0.9f, 20.0f)
+			glm::vec4(1.0f, 0.95f, 0.9f, 10.0f)
+		},
+		{
+			glm::vec4(-.255f, -.5f, -0.f, 0.0f),
+			glm::vec4(1.0f, 0.95f, 0.9f, 10.0f)
 		}
 	};
 
