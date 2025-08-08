@@ -15,6 +15,7 @@
 #include "PhysicalDevicePicker.h"
 #include "../cmake-build-release-visual-studio/_deps/assimp-src/code/AssetLib/OpenGEX/OpenGEXStructs.h"
 #include "glm/gtx/transform.hpp"
+#include "Structs/UBOStructs.h"
 
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -105,8 +106,51 @@ void VulkanWindow::UpdateUBO() {
 	ubo.cameraPos = m_Camera->position;
 
     Buffer::UploadData(m_UniformBufferInfo, &ubo, sizeof(ubo));
-
 }
+
+void VulkanWindow::UpdateShadowUBO() {
+	glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+
+	auto [sceneMin, sceneMax] =  VulkanMath::ComputeSceneAABB(m_Meshes);
+
+	auto corners = VulkanMath::GetAABBCorners(sceneMin, sceneMax);
+	glm::vec3 center = 0.5f * (sceneMin + sceneMax);
+
+	// project corners to find near/far in light space
+	float minProj = std::numeric_limits<float>::infinity();
+	float maxProj = -std::numeric_limits<float>::infinity();
+	for (auto& c : corners) {
+		float proj = glm::dot(c, lightDir);
+		minProj = std::min(minProj, proj);
+		maxProj = std::max(maxProj, proj);
+	}
+
+	glm::mat4 view = glm::lookAt(glm::vec3(50, 50, 50), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+
+	glm::vec3 minLS( std::numeric_limits<float>::infinity() );
+	glm::vec3 maxLS( -std::numeric_limits<float>::infinity() );
+	for (auto& c : corners) {
+		glm::vec3 ls = glm::vec3(view * glm::vec4(c, 1.0f));
+		minLS = glm::min(minLS, ls);
+		maxLS = glm::max(maxLS, ls);
+	}
+
+	float nearPlane = minLS.z;
+	float farPlane  = maxLS.z + 10.f;
+
+	glm::mat4 proj = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, 0.1f, 500.0f);
+
+	ShadowMVP smvp{};
+	smvp.view = view;
+	smvp.proj = proj;
+	smvp.vp = proj * view;
+	smvp.center = center;
+	smvp.NearFarPlanes = glm::vec2(nearPlane, farPlane);
+
+	Buffer::UploadData(m_ShadowUBOBufferInfo, &smvp, sizeof(smvp));
+}
+
+
 
 void VulkanWindow::CreateSurface() {
 	VkSurfaceKHR m_TempSurface;
@@ -252,6 +296,7 @@ void VulkanWindow::InitVulkan() {
 				.AddBinding(2,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
 				.AddBinding(3,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
 				.AddBinding(4,vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
+				.AddBinding(5, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
 				.Build()
 		)
 	);
@@ -262,6 +307,11 @@ void VulkanWindow::InitVulkan() {
 		vk::BufferUsageFlagBits::eUniformBuffer,
 		VMA_MEMORY_USAGE_CPU_TO_GPU,
 		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"MVP");
+
+	m_ShadowUBOBufferInfo =  m_Buffer->CreateMapped(m_VmaAllocator,sizeof(ShadowMVP),
+		vk::BufferUsageFlagBits::eUniformBuffer,
+		VMA_MEMORY_USAGE_CPU_TO_GPU,
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_AllocationTracker.get(),"ShadowMVP");
 
 	m_PointLightBufferInfo = m_Buffer->CreateMapped(
 		m_VmaAllocator,
@@ -345,6 +395,8 @@ void VulkanWindow::InitVulkan() {
 	m_GBufferPass = std::make_unique<GBufferPass>(*m_Device,m_CommandBuffers);
 	m_GBufferPass->CreateGBuffer(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),m_SwapChainFactory->Extent.width,m_SwapChainFactory->Extent.height);
 
+	m_ShadowPass = std::make_unique<ShadowPass>(*m_Device,m_CommandBuffers);
+
 	LoadMesh();
 
 	m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
@@ -367,35 +419,47 @@ void VulkanWindow::InitVulkan() {
 	);
 
 
-	m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo);
+	m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo, m_ShadowUBOBufferInfo);
 
 	m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 	m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
-
+	m_ShadowPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 
 	CreatePipelineLayout();
 	m_GBufferPass->m_PipelineLayout = **m_PipelineLayout;
 	m_DepthPass->m_PipelineLayout = **m_PipelineLayout;
+	m_ShadowPass->m_PipelineLayout = **m_PipelineLayout;
 
 	m_GBufferPass->SetMeshes(m_Meshes);
 	m_DepthPass->SetMeshes(m_Meshes);
+	m_ShadowPass->SetMeshes(m_Meshes);
 
 	std::pair Format = {m_SwapChainFactory->Format.format, m_DepthImageFactory->GetFormat()};
 
-	m_DepthPass->CreatePipeline(m_ImageResource.size(),Format);
-	m_GBufferPass->CreatePipeline(m_ImageResource.size(), m_DepthImageFactory->GetFormat());
+	m_DepthPass->CreatePipeline(static_cast<uint32_t>(m_ImageResource.size()),Format);
+	m_GBufferPass->CreatePipeline(static_cast<uint32_t>(m_ImageResource.size()), m_DepthImageFactory->GetFormat());
+	m_ShadowPass->CreatePipeline(static_cast<uint32_t>(m_ImageResource.size()), m_DepthImageFactory->GetFormat());
 
 	// create color pass
 	std::pair lights = {m_DirectionalLights, m_PointLights};
 	m_ColorPass = std::make_unique<ColorPass>(*m_Device,**m_PipelineLayout,m_CommandBuffers,lights,Format);
 	m_ColorPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+	m_ShadowPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
+
+	m_ShadowPass->CreateShadowResources(m_VmaAllocator,m_VmaAllocatorsDeletionQueue,m_AllocationTracker.get(),1024,1024);
 
 	CreateCommandBuffers();
+
+    BeginCommandBuffer();
+		UpdateShadowUBO();
+		m_ShadowPass->DoPass(m_CurrentFrame,1024,1024);
+	EndCommandBuffer();
 
 	m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
 		Buffer::Destroy(m_VmaAllocator,m_UniformBufferInfo.m_Buffer,m_UniformBufferInfo.m_Allocation,m_AllocationTracker.get());
 		Buffer::Destroy(m_VmaAllocator,m_PointLightBufferInfo.m_Buffer,m_PointLightBufferInfo.m_Allocation,m_AllocationTracker.get());
 		Buffer::Destroy(m_VmaAllocator,m_DirectionalLightBufferInfo.m_Buffer,m_DirectionalLightBufferInfo.m_Allocation,m_AllocationTracker.get());
+		Buffer::Destroy(m_VmaAllocator,m_ShadowUBOBufferInfo.m_Buffer,m_ShadowUBOBufferInfo.m_Allocation,m_AllocationTracker.get());
 
 	});
 
@@ -417,6 +481,7 @@ void VulkanWindow::DrawFrame() {
     uint32_t imageIndex = AcquireSwapchainImage();
 
     BeginCommandBuffer();
+
 
     TransitionInitialLayouts(imageIndex);
 
@@ -504,7 +569,7 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 		m_ImageResource,
 		m_SwapChainImageViews
 	);
-	m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo);
+	m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout,m_GBufferPass->GetImageViews(),m_DepthPass->GetImageView(),m_UniformBufferInfo, m_ShadowUBOBufferInfo);
 
 	m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 	m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);

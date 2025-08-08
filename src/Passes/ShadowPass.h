@@ -45,8 +45,6 @@ private:
 
     std::unique_ptr<ImageResource> m_ShadowImageResource;
     std::unique_ptr<vk::raii::ImageView> m_ShadowImageView;
-    std::unique_ptr<vk::raii::RenderPass> m_RenderPass;
-    std::unique_ptr<vk::raii::Framebuffer> m_Framebuffer;
     std::unique_ptr<vk::raii::Sampler> m_ShadowSampler;
 
 

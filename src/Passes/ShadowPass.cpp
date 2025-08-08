@@ -7,64 +7,8 @@
 #include "Factories/ImageFactory.h"
 #include "Factories/ShaderFactory.h"
 
-
-void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format format) {
-    // formats.first  = (unused) color format
-    // formats.second = depth format (e.g., vk::Format::eD32Sfloat)
-
-    auto m_DepthFormat = format;
-
-
-    // 1. Load shadow vertex shader (no fragment shader!)
-    auto shadowVert = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadowvert.spv","shaders/shadowfrag.spv");
-
-    vk::PipelineShaderStageCreateInfo vertStageInfo{};
-    vertStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
-    vertStageInfo.module = *shadowVert[0];
-    vertStageInfo.pName = "main";
-
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertStageInfo };
-
-    // 2. Vertex input (position only for shadows)
-    vk::VertexInputBindingDescription bindingDesc{ 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
-    std::vector<vk::VertexInputAttributeDescription> attributes = {
-        { 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) }
-    };
-
-    vk::PipelineVertexInputStateCreateInfo vertexInput{};
-    vertexInput.vertexBindingDescriptionCount = 1;
-    vertexInput.pVertexBindingDescriptions = &bindingDesc;
-    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributes.size());
-    vertexInput.pVertexAttributeDescriptions = attributes.data();
-
-    // 3. Input assembly
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    // 4. Viewport state (dynamic)
-    vk::PipelineViewportStateCreateInfo viewportState{};
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
-
-    // 5. Rasterizer
-    vk::PipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.depthClampEnable = VK_FALSE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = vk::PolygonMode::eFill;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
-    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-    rasterizer.depthBiasEnable = VK_TRUE;
-    rasterizer.depthBiasConstantFactor = 1.25f;
-    rasterizer.depthBiasClamp = 0.0f;
-    rasterizer.depthBiasSlopeFactor = 1.75f;
-
-    // 6. Multisampling (off)
-    vk::PipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
-
-    // 7. Depth stencil
+void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat) {
+    // Depth test/write enabled, less or equal for shadow mapping
     vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
@@ -72,88 +16,151 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format format) {
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
-    // 8. Dynamic states
-    std::vector<vk::DynamicState> dynamicStates = {
-        vk::DynamicState::eViewport,
-        vk::DynamicState::eScissor
+    // Optional: specialization constants if your shadow shader needs them
+    uint32_t textureCount = shadowMapCount;
+    vk::SpecializationMapEntry specializationEntry(0, 0, sizeof(uint32_t));
+    vk::SpecializationInfo specializationInfo{
+        1, &specializationEntry, sizeof(textureCount), &textureCount
     };
 
-    // 9. No color blend attachments
-    std::vector<vk::PipelineColorBlendAttachmentState> colorBlendAttachments; // empty
+    // No color writes
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.blendEnable = VK_FALSE;
 
-    // 10. Build pipeline using factory
-    m_Pipeline = std::make_unique<vk::raii::Pipeline>(m_PipelineFactory
-        ->SetShaderStages(shaderStages)
-        .SetVertexInput(vertexInput)
-        .SetInputAssembly(inputAssembly)
-        .SetRasterizer(rasterizer)
-        .SetMultisampling(multisampling)
-        .SetColorBlendAttachments(colorBlendAttachments) // none
-        .SetDepthFormat(m_DepthFormat)
-        .SetDepthStencil(depthStencil)
-        .SetDynamicStates(dynamicStates)
-        .SetViewportState(viewportState)
-        .SetLayout(m_PipelineLayout)
-        .Build());
+    // Multisampling
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+
+    // Rasterizer
+    vk::PipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = vk::PolygonMode::eFill;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
+    rasterizer.depthBiasEnable = VK_TRUE; // depth bias for shadow mapping
+    rasterizer.depthBiasConstantFactor = 1.25f;
+    rasterizer.depthBiasClamp = 0.0f;
+    rasterizer.depthBiasSlopeFactor = 1.75f;
+
+    // Input assembly
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    // Vertex input (match Vertex struct)
+    vk::VertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+    // Shaders
+    auto shadowShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadowvert.spv", "shaders/shadowfrag.spv");
+
+    vk::PipelineShaderStageCreateInfo vertexStageInfo{};
+    vertexStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
+    vertexStageInfo.module = *shadowShaderModules[0];
+    vertexStageInfo.pName = "main";
+
+    vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
+    fragmentStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
+    fragmentStageInfo.module = *shadowShaderModules[1];
+    fragmentStageInfo.pName = "main";
+    fragmentStageInfo.pSpecializationInfo = &specializationInfo;
+
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
+
+    // Viewport state (dynamic)
+    vk::PipelineViewportStateCreateInfo viewportState{};
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = nullptr;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = nullptr;
+
+    // Build pipeline — depth-only, dynamic rendering style
+    m_Pipeline = std::make_unique<vk::raii::Pipeline>(
+        m_PipelineFactory
+            ->SetShaderStages(shaderStages)
+            .SetVertexInput(vertexInputInfo)
+            .SetInputAssembly(inputAssembly)
+            .SetRasterizer(rasterizer)
+            .SetMultisampling(multisampling)
+            .SetColorBlendAttachments({ colorBlendAttachment }) // no color output
+            .SetViewportState(viewportState)
+            .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
+            .SetDepthStencil(depthStencil)
+            .SetLayout(m_PipelineLayout)
+            .SetColorFormats({})
+            .SetDepthFormat(depthFormat)
+            .Build()
+    );
 }
 
 
-
 void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) const {
+    vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    vk::Rect2D scissor{{0, 0}, {width, height}};
 
+    // Depth attachment for shadow map
+    vk::RenderingAttachmentInfo depthAttachment{};
+    depthAttachment.setImageView(**m_ShadowImageView);
+    depthAttachment.setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal);
+    depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+    depthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+    depthAttachment.setClearValue(vk::ClearValue().setDepthStencil({1.0f, 0}));
 
-    // 1. Begin render pass
-    vk::ClearValue clearValue;
-    clearValue.depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
+    vk::RenderingInfo renderInfo{};
+    renderInfo.setRenderArea(scissor);
+    renderInfo.setLayerCount(1);
+    renderInfo.setColorAttachmentCount(0);
+    renderInfo.setPDepthAttachment(&depthAttachment);
 
-    vk::RenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.renderPass = **m_RenderPass;
-    renderPassInfo.framebuffer = **m_Framebuffer;
-    renderPassInfo.renderArea.offset = vk::Offset2D{0, 0};
-    renderPassInfo.renderArea.extent = vk::Extent2D{width, height};
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearValue;
-
-    m_CommandBuffer[CurrentFrame]->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-
-    // 2. Set viewport and scissor
-    vk::Viewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(width);
-    viewport.height = static_cast<float>(height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    m_CommandBuffer[CurrentFrame]->setViewport(0, viewport);
-
-    vk::Rect2D scissor{};
-    scissor.offset = vk::Offset2D{0, 0};
-    scissor.extent = vk::Extent2D{width, height};
-    m_CommandBuffer[CurrentFrame]->setScissor(0, scissor);
-
-    // 3. Bind pipeline
-    m_CommandBuffer[CurrentFrame]->bindPipeline(vk::PipelineBindPoint::eGraphics, *m_Pipeline);
-
-    // 4. Bind descriptor sets (e.g. light-space matrix UBO)
+    m_CommandBuffer[CurrentFrame]->beginRendering(renderInfo);
+    m_CommandBuffer[CurrentFrame]->bindPipeline(vk::PipelineBindPoint::eGraphics, **m_Pipeline);
     m_CommandBuffer[CurrentFrame]->bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         m_PipelineLayout,
         0,
-        m_DescriptorSets[CurrentFrame],
-        nullptr
+        m_DescriptorSets,
+        {}
     );
+    m_CommandBuffer[CurrentFrame]->setViewport(0, viewport);
+    m_CommandBuffer[CurrentFrame]->setScissor(0, scissor);
 
-    // 5. Draw each mesh
     for (const auto& mesh : m_Meshes) {
         m_CommandBuffer[CurrentFrame]->bindVertexBuffers(0, {mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
         m_CommandBuffer[CurrentFrame]->bindIndexBuffer(mesh.m_IndexBufferInfo.m_Buffer, 0, vk::IndexType::eUint32);
-        m_CommandBuffer[CurrentFrame]->pushConstants(m_PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, vk::ArrayProxy<const Material>{mesh.m_Material});
+        m_CommandBuffer[CurrentFrame]->pushConstants(
+            m_PipelineLayout,
+            vk::ShaderStageFlagBits::eFragment,
+            0,
+            vk::ArrayProxy<const Material>{mesh.m_Material}
+        );
         m_CommandBuffer[CurrentFrame]->drawIndexed(mesh.m_IndexCount, 1, 0, 0, 0);
     }
 
-    // 6. End render pass
-    m_CommandBuffer[CurrentFrame]->endRenderPass();
+    m_CommandBuffer[CurrentFrame]->endRendering();
+
+    //  transition shadow map image for sampling
+    ImageFactory::ShiftImageLayout(
+        *m_CommandBuffer[CurrentFrame],
+        *m_ShadowImageResource,
+        vk::ImageLayout::eDepthAttachmentOptimal,
+        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits::eShaderRead,
+        vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        vk::PipelineStageFlagBits::eFragmentShader
+    );
 }
+
 
 
 void ShadowPass::CreateShadowResources(
@@ -200,33 +207,6 @@ void ShadowPass::CreateShadowResources(
     viewInfo.subresourceRange.layerCount = 1;
 
     m_ShadowImageView = std::make_unique<vk::raii::ImageView>(m_Device, viewInfo);
-
-    // Create render pass
-    vk::AttachmentDescription depthAttachment{};
-    depthAttachment.format = vk::Format::eD32Sfloat;
-    depthAttachment.samples = vk::SampleCountFlagBits::e1;
-    depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
-    depthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
-    depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
-    depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal;
-
-    vk::AttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 0;
-    depthAttachmentRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-
-    vk::SubpassDescription subpass{};
-    subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-    vk::RenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &depthAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-
-    m_RenderPass = std::make_unique<vk::raii::RenderPass>(m_Device, renderPassInfo);
 
     // Create sampler
     vk::SamplerCreateInfo samplerInfo{};

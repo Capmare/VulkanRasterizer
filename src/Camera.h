@@ -6,18 +6,23 @@
 #define CAMERA_H
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Math/math.h"
+#include "Structs/UBOStructs.h"
+
 
 class Camera {
-
-
 public:
     Camera() = default;
+
     virtual ~Camera() = default;
 
-    Camera(const Camera&) = delete;
-    Camera(Camera&&) noexcept = delete;
-    Camera& operator=(const Camera&) = delete;
-    Camera& operator=(Camera&&) noexcept = delete;
+    Camera(const Camera &) = delete;
+
+    Camera(Camera &&) noexcept = delete;
+
+    Camera &operator=(const Camera &) = delete;
+
+    Camera &operator=(Camera &&) noexcept = delete;
 
     glm::mat4 GetViewMatrix() const;
 
@@ -34,22 +39,26 @@ public:
         target = glm::normalize(front);
     }
 
-    void Move(const glm::vec3& offset) {
+    void Move(const glm::vec3 &offset) {
         position += offset;
     }
 
+    static ShadowMVP BuildDirectionalShadowCamera(
+        const glm::vec3 &aabbMin,
+        const glm::vec3 &aabbMax,
+        const glm::vec3 &lightDirNormalized, // direction light is shining
+        const glm::vec3 &worldUp = glm::vec3(0.0f, 1.0f, 0.0f)
+    );
 
     glm::vec3 position = glm::vec3(0.f, 4.f, 0.f);
     glm::vec3 target = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 up = glm::vec3(0.f, 1.f, 0.f);
+
 private:
-
-
     float fov = 45.0f;
     float nearPlane = 0.1f;
     float farPlane = 100.0f;
 };
-
 
 
 #endif //CAMERA_H

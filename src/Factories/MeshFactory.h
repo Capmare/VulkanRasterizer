@@ -15,67 +15,7 @@
 #include "vma/vk_mem_alloc.h"
 #include "glm/glm.hpp"
 #include "vulkan/vulkan_raii.hpp"
-
-
-struct alignas(16)  MVP {
-   alignas(16) glm::mat4 model;
-   alignas(16) glm::mat4 view;
-   alignas(16) glm::mat4 proj;
-   alignas(16) glm::vec3 cameraPos;
-};
-
-struct alignas(16)  LightSpace {
-    alignas(16) glm::mat4 lightSpaceMatrix;
-};
-
-struct Material {
-    int diffuseIdx = -1;
-    int normalIdx = -1;
-    int metallicIdx = -1;
-    int roughnessIdx = -1;
-    int aoIdx = -1;
-    int emissiveIdx = -1;
-};
-
-
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec3 bitangent;
-
-    static vk::VertexInputBindingDescription getBindingDescription() {
-        return { 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
-    }
-
-    static std::array<vk::VertexInputAttributeDescription, 6> getAttributeDescriptions() {
-        return {
-            vk::VertexInputAttributeDescription{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) },
-            vk::VertexInputAttributeDescription{ 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) },
-            vk::VertexInputAttributeDescription{ 2, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, texCoord) },
-            vk::VertexInputAttributeDescription{ 3, 0, vk::Format::eR32G32B32Sfloat,    offsetof(Vertex, normal) },
-            vk::VertexInputAttributeDescription{ 4, 0, vk::Format::eR32G32B32Sfloat,    offsetof(Vertex, tangent) },
-            vk::VertexInputAttributeDescription{ 5, 0, vk::Format::eR32G32B32Sfloat,    offsetof(Vertex, bitangent) }
-        };
-    }
-
-};
-
-struct Mesh
-{
-    BufferInfo m_VertexBufferInfo;
-    VkDeviceSize m_VertexOffset{};
-
-
-    BufferInfo m_IndexBufferInfo;
-    VkDeviceSize m_IndexOffset;
-    uint32_t m_IndexCount;
-
-    Material m_Material;
-
-};
+#include "Structs/Mesh.h"
 
 class MeshFactory {
 

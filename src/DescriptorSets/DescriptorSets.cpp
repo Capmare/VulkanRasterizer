@@ -10,12 +10,15 @@
 #include <complex.h>
 #include <complex.h>
 #include <complex.h>
+#include <complex.h>
+#include <complex.h>
 #include <ranges>
 
 #include "Factories/MeshFactory.h"
 #include "Structs/Lights.h"
+#include "Structs/UBOStructs.h"
 
-void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout& FrameLayout, const std::tuple<vk::ImageView,vk::ImageView,vk::ImageView>& ColorImageViews, const vk::ImageView& DepthImageView, const BufferInfo& m_UniformBufferInfo) {
+void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout& FrameLayout, const std::tuple<vk::ImageView,vk::ImageView,vk::ImageView>& ColorImageViews, const vk::ImageView& DepthImageView, const BufferInfo& UniformBufferInfo, const BufferInfo& ShadowBufferInfo) {
 
 	m_FrameDescriptorSets.release();
 
@@ -31,7 +34,7 @@ void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout& Fra
 
 	// Descriptor buffer info (uniform buffer)
 	vk::DescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = m_UniformBufferInfo.m_Buffer;
+	bufferInfo.buffer = UniformBufferInfo.m_Buffer;
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(MVP);
 
@@ -55,10 +58,14 @@ void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout& Fra
 	DepthImageInfo.imageView = DepthImageView;
 	DepthImageInfo.sampler = nullptr;
 
+	vk::DescriptorBufferInfo shadowBufferInfo{};
+	shadowBufferInfo.buffer = ShadowBufferInfo.m_Buffer;
+	shadowBufferInfo.offset = 0;
+	shadowBufferInfo.range = sizeof(ShadowMVP);
 
 	for (auto& ds : *m_FrameDescriptorSets) {
-		vk::WriteDescriptorSet writeInfo{};
 
+		vk::WriteDescriptorSet writeInfo{};
 		writeInfo.dstSet          = ds;
 		writeInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
 		writeInfo.descriptorCount = static_cast<uint32_t>(1);
@@ -98,8 +105,15 @@ void DescriptorSets::CreateFrameDescriptorSet(const vk::DescriptorSetLayout& Fra
 		textureDepth.dstBinding	  = 4;
 		textureDepth.pBufferInfo     = nullptr;
 
+		vk::WriteDescriptorSet ShadowWriteInfo{};
+		ShadowWriteInfo.dstSet          = ds;
+		ShadowWriteInfo.descriptorType  = vk::DescriptorType::eUniformBuffer;
+		ShadowWriteInfo.descriptorCount = static_cast<uint32_t>(1);
+		ShadowWriteInfo.pImageInfo      = nullptr;
+		ShadowWriteInfo.pBufferInfo     = &shadowBufferInfo;
+		ShadowWriteInfo.dstBinding = 5;
 
-		m_Device.updateDescriptorSets({writeInfo,textureDiffuse,textureNormal,textureMaterial, textureDepth}, nullptr);
+		m_Device.updateDescriptorSets({writeInfo,textureDiffuse,textureNormal,textureMaterial, textureDepth,ShadowWriteInfo}, nullptr);
 
 
 	}
@@ -109,7 +123,7 @@ void DescriptorSets::CreateDescriptorPool() {
 
 	vk::DescriptorPoolSize UboPoolSize{};
 	UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
-	UboPoolSize.descriptorCount = 2;
+	UboPoolSize.descriptorCount = 4;
 
 	vk::DescriptorPoolSize SamplerPoolSize{};
 	SamplerPoolSize.type = vk::DescriptorType::eSampler;

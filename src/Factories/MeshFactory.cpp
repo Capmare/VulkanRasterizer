@@ -9,6 +9,7 @@
 #include "Buffer.h"
 #include "ImageFactory.h"
 #include "ResourceTracker.h"
+#include "Structs/UBOStructs.h"
 
 std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
     const std::string& path,
