@@ -139,7 +139,9 @@ void main() {
     vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
     float roughness = texture(sampler2D(Material, texSampler), inTexCoord).g;
-    vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).rgb;
+    roughness = clamp(roughness, 0.04, 1.0);
+
+    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).rgb);
 
     vec3 Lo = vec3(0,0,0);
     vec3 V = normalize(ubo.cameraPos - worldPos);
@@ -171,6 +173,7 @@ void main() {
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
+    float shadowDepth;
     for (int i = 0; i < MAX_DIRECTIONAL_LIGHTS; ++i) {
         vec3 L = normalize(-dirLightBuffer.dirLights[i].Direction.xyz);
         vec3 H = normalize(V + L);
@@ -194,7 +197,9 @@ void main() {
         vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
         lightSpacePosition /= lightSpacePosition.w;
         vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
-        float shadowDepth = texture(sampler2DShadow(Shadow[i],shadowSampler),shadowMapUV).r;
+        float bias = max(0.0005 * (1.0 - dot(N, L)), 0.00005);
+        float shadowDepth = texture(sampler2DShadow(Shadow[i], shadowSampler),
+                                    vec3(shadowMapUV.xy, shadowMapUV.z - bias));
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }

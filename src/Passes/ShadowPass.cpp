@@ -46,7 +46,7 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     rasterizer.cullMode = vk::CullModeFlagBits::eBack;
     rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
     rasterizer.depthBiasEnable = VK_TRUE; // depth bias for shadow mapping
-    rasterizer.depthBiasConstantFactor = 1.5f;
+    rasterizer.depthBiasConstantFactor = 1.25f;
     rasterizer.depthBiasClamp = 0.0f;
     rasterizer.depthBiasSlopeFactor = 1.75f;
 
