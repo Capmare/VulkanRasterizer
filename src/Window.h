@@ -216,8 +216,8 @@ private:
 	const std::vector<DirectionalLight> m_DirectionalLights =
 	{
 		{
-			glm::vec4(-0.3f, -1.0f, -0.3f, 0.0f),
-			glm::vec4(1.0f, 0.95f, 0.9f, 5.0f)
+			glm::vec4(-.5f, -.5f, -0.f, 0.0f),
+			glm::vec4(1.0f, 0.95f, 0.9f, 20.0f)
 		}
 	};
 

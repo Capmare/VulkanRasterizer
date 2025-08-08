@@ -48,7 +48,8 @@ public:
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker *
                                        ResourceTracker, const std::string &Name);
 
-    static void CreateImage(VmaAllocator Allocator,ImageResource& Image, vk::ImageCreateInfo imageInfo);;
+    static void CreateImage(const vk::raii::Device &device, VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo, const std
+                            ::string &name);
 
     static void ShiftImageLayout(
         const vk::CommandBuffer &commandBuffer, ImageResource &image,

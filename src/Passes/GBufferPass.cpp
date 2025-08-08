@@ -150,15 +150,8 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
         imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
 
-        ImageFactory::CreateImage(Allocator, m_GBufferDiffuse, imageInfo);
+        ImageFactory::CreateImage(m_Device,Allocator, m_GBufferDiffuse, imageInfo,"GBuffer.Diffuse");
 
-
-        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
-        nameInfo.pObjectName = "GBuffer.Diffuse";
-        nameInfo.objectType = vk::ObjectType::eImage;
-        nameInfo.objectHandle = uint64_t(&*m_GBufferDiffuse.image);
-
-        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
     }
 
     // Normals
@@ -175,12 +168,8 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
         imageInfo.samples = vk::SampleCountFlagBits::e1;
         imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-        ImageFactory::CreateImage(Allocator, m_GBufferNormals, imageInfo);
-        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
-        nameInfo.pObjectName = "GBuffer.Normals";
-        nameInfo.objectType = vk::ObjectType::eImage;
-        nameInfo.objectHandle = uint64_t(&*m_GBufferNormals.image);
-        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
+        ImageFactory::CreateImage(m_Device, Allocator, m_GBufferNormals, imageInfo,"GBuffer.Normals");
+
     }
 
     // Material (Roughness + Metalness)
@@ -197,12 +186,8 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
         imageInfo.samples = vk::SampleCountFlagBits::e1;
         imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-        ImageFactory::CreateImage(Allocator, m_GBufferMaterial, imageInfo);
-        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
-        nameInfo.pObjectName = "GBuffer.Material";
-        nameInfo.objectType = vk::ObjectType::eImage;
-        nameInfo.objectHandle = uint64_t(&*m_GBufferMaterial.image);
-        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
+        ImageFactory::CreateImage(m_Device,Allocator, m_GBufferMaterial, imageInfo,"GBuffer.Material");
+
     }
 
     m_GBufferDiffuseView = ImageFactory::CreateImageView(m_Device, m_GBufferDiffuse.image, vk::Format::eR8G8B8A8Srgb,
@@ -387,8 +372,9 @@ void GBufferPass::CreatePipeline(uint32_t ImageResourceSize, const vk::Format &D
         .Build());
 }
 
-void GBufferPass::RecreateGBuffer(VmaAllocator Allocator, ResourceTracker *AllocationTracker, uint32_t width,
-                                  uint32_t height) {
+void GBufferPass::RecreateGBuffer(VmaAllocator Allocator,
+                                std::deque<std::function<void(VmaAllocator)> > &VmaAllocatorsDeletionQueue,
+                                ResourceTracker *AllocationTracker, const uint32_t width, const uint32_t height) {
     // Destroy old GBuffer resources
     AllocationTracker->UntrackImageView(m_GBufferDiffuseView);
     AllocationTracker->UntrackImageView(m_GBufferNormalsView);
@@ -408,67 +394,7 @@ void GBufferPass::RecreateGBuffer(VmaAllocator Allocator, ResourceTracker *Alloc
 
     vk::Extent3D extent = {width, height, 1};
 
-    // Recreate Diffuse
-    {
-        vk::ImageCreateInfo imageInfo{};
-        imageInfo.imageType = vk::ImageType::e2D;
-        imageInfo.extent = extent;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = vk::Format::eR8G8B8A8Srgb;
-        imageInfo.tiling = vk::ImageTiling::eOptimal;
-        imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-        imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
-        imageInfo.samples = vk::SampleCountFlagBits::e1;
-        imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-        ImageFactory::CreateImage(Allocator, m_GBufferDiffuse, imageInfo);
-    }
-
-    // Recreate Normals
-    {
-        vk::ImageCreateInfo imageInfo{};
-        imageInfo.imageType = vk::ImageType::e2D;
-        imageInfo.extent = extent;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = vk::Format::eR8G8B8A8Unorm;
-        imageInfo.tiling = vk::ImageTiling::eOptimal;
-        imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-        imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
-        imageInfo.samples = vk::SampleCountFlagBits::e1;
-        imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-        ImageFactory::CreateImage(Allocator, m_GBufferNormals, imageInfo);
-    }
-
-    // Recreate Material
-    {
-        vk::ImageCreateInfo imageInfo{};
-        imageInfo.imageType = vk::ImageType::e2D;
-        imageInfo.extent = extent;
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = vk::Format::eR8G8B8A8Srgb;
-        imageInfo.tiling = vk::ImageTiling::eOptimal;
-        imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-        imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
-        imageInfo.samples = vk::SampleCountFlagBits::e1;
-        imageInfo.sharingMode = vk::SharingMode::eExclusive;
-
-        ImageFactory::CreateImage(Allocator, m_GBufferMaterial, imageInfo);
-    }
-
-    // Create image views
-    m_GBufferDiffuseView = ImageFactory::CreateImageView(m_Device, m_GBufferDiffuse.image, vk::Format::eR8G8B8A8Srgb,
-                                                         vk::ImageAspectFlagBits::eColor, AllocationTracker,
-                                                         "GBufferDiffuseView");
-    m_GBufferNormalsView = ImageFactory::CreateImageView(m_Device, m_GBufferNormals.image, vk::Format::eR8G8B8A8Unorm,
-                                                         vk::ImageAspectFlagBits::eColor, AllocationTracker,
-                                                         "GBufferNormalsView");
-    m_GBufferMaterialView = ImageFactory::CreateImageView(m_Device, m_GBufferMaterial.image, vk::Format::eR8G8B8A8Srgb,
-                                                          vk::ImageAspectFlagBits::eColor, AllocationTracker,
-                                                          "GBufferMaterialView");
+    CreateGBuffer(Allocator,VmaAllocatorsDeletionQueue,AllocationTracker, width, height);
 }
 
 std::tuple<VkImageView, VkImageView, VkImageView> GBufferPass::GetImageViews() {

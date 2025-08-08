@@ -29,14 +29,14 @@ class DescriptorSets {
 
     void CreateFrameDescriptorSet(const ::vk::DescriptorSetLayout &FrameLayout,
                                   const std::tuple<vk::ImageView, vk::ImageView, vk::ImageView> & ColorImageViews, const vk::ImageView &DepthImageView,
-                                  const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo);
+                                  const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo, const vk::ImageView &ShadowImageView);
 
     void CreateGlobalDescriptorSet(
         const vk::DescriptorSetLayout &GlobalLayout,
         const vk::Sampler &Sampler, const std::pair<BufferInfo, uint32_t> &PointLights,
         const std::pair<BufferInfo, uint32_t> &DirectionalLights,
         const std::vector<ImageResource> &ImageResources,
-        const std::vector<vk::ImageView> &SwapchainImageViews);
+        const std::vector<vk::ImageView> &SwapchainImageViews, const vk::Sampler &ShadowSampler);
 
     // 0 descriptor pool, 1 descriptor set
     std::pair<vk::DescriptorPool, vk::DescriptorSet> GetFrameDescriptorSet(uint32_t CurrentFrame) const { return {*m_DescriptorPool,*(*m_FrameDescriptorSets)[CurrentFrame]}; };

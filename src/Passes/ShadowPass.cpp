@@ -26,8 +26,8 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     // No color writes
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask =
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+            vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
     colorBlendAttachment.blendEnable = VK_FALSE;
 
     // Multisampling
@@ -63,7 +63,8 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     // Shaders
-    auto shadowShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadowvert.spv", "shaders/shadowfrag.spv");
+    auto shadowShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadowvert.spv",
+                                                                  "shaders/shadowfrag.spv");
 
     vk::PipelineShaderStageCreateInfo vertexStageInfo{};
     vertexStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
@@ -76,7 +77,7 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     fragmentStageInfo.pName = "main";
     fragmentStageInfo.pSpecializationInfo = &specializationInfo;
 
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {vertexStageInfo, fragmentStageInfo};
 
     // Viewport state (dynamic)
     vk::PipelineViewportStateCreateInfo viewportState{};
@@ -88,19 +89,19 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     // Build pipeline — depth-only, dynamic rendering style
     m_Pipeline = std::make_unique<vk::raii::Pipeline>(
         m_PipelineFactory
-            ->SetShaderStages(shaderStages)
-            .SetVertexInput(vertexInputInfo)
-            .SetInputAssembly(inputAssembly)
-            .SetRasterizer(rasterizer)
-            .SetMultisampling(multisampling)
-            .SetColorBlendAttachments({ colorBlendAttachment }) // no color output
-            .SetViewportState(viewportState)
-            .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
-            .SetDepthStencil(depthStencil)
-            .SetLayout(m_PipelineLayout)
-            .SetColorFormats({})
-            .SetDepthFormat(depthFormat)
-            .Build()
+        ->SetShaderStages(shaderStages)
+        .SetVertexInput(vertexInputInfo)
+        .SetInputAssembly(inputAssembly)
+        .SetRasterizer(rasterizer)
+        .SetMultisampling(multisampling)
+        .SetColorBlendAttachments({colorBlendAttachment}) // no color output
+        .SetViewportState(viewportState)
+        .SetDynamicStates({vk::DynamicState::eScissor, vk::DynamicState::eViewport})
+        .SetDepthStencil(depthStencil)
+        .SetLayout(m_PipelineLayout)
+        .SetColorFormats({})
+        .SetDepthFormat(depthFormat)
+        .Build()
     );
 }
 
@@ -111,7 +112,7 @@ void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) 
 
     // Depth attachment for shadow map
     vk::RenderingAttachmentInfo depthAttachment{};
-    depthAttachment.setImageView(**m_ShadowImageView);
+    depthAttachment.setImageView(m_ShadowImageView);
     depthAttachment.setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal);
     depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
     depthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -135,7 +136,7 @@ void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) 
     m_CommandBuffer[CurrentFrame]->setViewport(0, viewport);
     m_CommandBuffer[CurrentFrame]->setScissor(0, scissor);
 
-    for (const auto& mesh : m_Meshes) {
+    for (const auto &mesh: m_Meshes) {
         m_CommandBuffer[CurrentFrame]->bindVertexBuffers(0, {mesh.m_VertexBufferInfo.m_Buffer}, mesh.m_VertexOffset);
         m_CommandBuffer[CurrentFrame]->bindIndexBuffer(mesh.m_IndexBufferInfo.m_Buffer, 0, vk::IndexType::eUint32);
         m_CommandBuffer[CurrentFrame]->pushConstants(
@@ -162,11 +163,10 @@ void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) 
 }
 
 
-
 void ShadowPass::CreateShadowResources(
     VmaAllocator allocator,
-    std::deque<std::function<void(VmaAllocator)>>& deletionQueue,
-    ResourceTracker* tracker,
+    std::deque<std::function<void(VmaAllocator)> > &deletionQueue,
+    ResourceTracker *tracker,
     uint32_t width,
     uint32_t height
 ) {
@@ -186,12 +186,9 @@ void ShadowPass::CreateShadowResources(
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
     m_ShadowImageResource = std::make_unique<ImageResource>();
-    ImageFactory::CreateImage(allocator, *m_ShadowImageResource, imageInfo);
+    ImageFactory::CreateImage(m_Device,allocator, *m_ShadowImageResource, imageInfo, "Shadow Image");
 
-    deletionQueue.emplace_back([resource = m_ShadowImageResource.get(), tracker = tracker](VmaAllocator alloc) {
-        tracker->UntrackAllocation(resource->allocation);
-        vmaDestroyImage(alloc, resource->image, resource->allocation);
-    });
+
 
     if (tracker) tracker->TrackAllocation(m_ShadowImageResource->allocation, "ShadowMap");
 
@@ -205,8 +202,6 @@ void ShadowPass::CreateShadowResources(
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
-
-    m_ShadowImageView = std::make_unique<vk::raii::ImageView>(m_Device, viewInfo);
 
     // Create sampler
     vk::SamplerCreateInfo samplerInfo{};
@@ -222,4 +217,26 @@ void ShadowPass::CreateShadowResources(
     samplerInfo.maxAnisotropy = 1.0f;
 
     m_ShadowSampler = std::make_unique<vk::raii::Sampler>(m_Device, samplerInfo);
+
+    m_ShadowImageView = ImageFactory::CreateImageView(
+            m_Device,
+            m_ShadowImageResource->image,
+            vk::Format::eD32Sfloat,
+            vk::ImageAspectFlagBits::eDepth,
+            tracker,
+            "ShadowMap"
+        );
+
+
+    m_ShadowImageResource->imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
+    m_ShadowImageResource->imageLayout = vk::ImageLayout::eUndefined;
+
+    deletionQueue.emplace_back([=](VmaAllocator alloc) {
+        tracker->UntrackAllocation(m_ShadowImageResource->allocation);
+        vmaDestroyImage(alloc, m_ShadowImageResource->image, m_ShadowImageResource->allocation);
+
+        tracker->UntrackImageView(m_ShadowImageView);
+        vmaDestroyImage(alloc, m_ShadowImageResource->image, m_ShadowImageResource->allocation);
+    });
+
 }

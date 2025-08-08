@@ -34,7 +34,9 @@ public:
     vk::PipelineLayout m_PipelineLayout;
     std::vector<vk::DescriptorSet> m_DescriptorSets;
 
-    vk::ImageView GetImageView() const { return **m_ShadowImageView; };
+    VkImageView GetImageView() const { return m_ShadowImageView; };
+	ImageResource& GetImage() { return *m_ShadowImageResource; };
+    vk::Sampler GetSampler() const { return **m_ShadowSampler; };
 
     void SetMeshes(const std::vector<Mesh>& Meshes) { m_Meshes = Meshes; };
 private:
@@ -44,7 +46,7 @@ private:
 
 
     std::unique_ptr<ImageResource> m_ShadowImageResource;
-    std::unique_ptr<vk::raii::ImageView> m_ShadowImageView;
+    VkImageView m_ShadowImageView;
     std::unique_ptr<vk::raii::Sampler> m_ShadowSampler;
 
 

@@ -5,51 +5,58 @@
 #define CAMERA_PRESET_INDOOR
 
 const float PI = 3.14159265359;
+const vec2 SHADOW_TEXEL_SIZE = vec2(1.0 / 1024.0);
 
-layout(location = 2) in vec2 inTexCoord;
-layout(location = 0) out vec4 outColor;
+layout (location = 2) in vec2 inTexCoord;
+layout (location = 0) out vec4 outColor;
 
-layout(set = 1, binding = 0) uniform sampler texSampler;
-layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
-layout(set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
+layout (set = 1, binding = 0) uniform sampler texSampler;
+layout (set = 1, binding = 4) uniform samplerShadow shadowSampler;
+layout (constant_id = 0) const uint TEXTURE_COUNT = 1u;
+layout (set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
-struct PointLight
-{
-    vec4 Position; // w is unused
-    vec4 Color; // w is intensity
+struct PointLight {
+    vec4 Position;
+    vec4 Color;
 };
 
 struct DirectionalLight {
-    vec4 Direction; // w unused
-    vec4 Color;     // w intensity
+    vec4 Direction;
+    vec4 Color;
 };
 
-layout(constant_id = 2) const uint MAX_POINT_LIGHTS = 1u;
-layout(constant_id = 3) const uint MAX_DIRECTIONAL_LIGHTS = 1u;
+layout (constant_id = 2) const uint MAX_POINT_LIGHTS = 1u;
+layout (constant_id = 3) const uint MAX_DIRECTIONAL_LIGHTS = 1u;
 
-layout(set = 1, binding = 2, std430) readonly buffer PointLightBuffer {
+layout (set = 1, binding = 2, std430) readonly buffer PointLightBuffer {
     PointLight pointLights[MAX_POINT_LIGHTS];
 } pointLightBuffer;
 
-layout(set = 1, binding = 3, std430) readonly buffer DirLightBuffer {
+layout (set = 1, binding = 3, std430) readonly buffer DirLightBuffer {
     DirectionalLight dirLights[MAX_DIRECTIONAL_LIGHTS];
 } dirLightBuffer;
 
-
-layout(std140, binding = 0) uniform UBO {
+layout (std140, binding = 0) uniform UBO {
     mat4 model;
     mat4 view;
     mat4 proj;
     vec3 cameraPos;
-
 } ubo;
 
-layout(set = 0, binding = 1) uniform texture2D Diffuse;
-layout(set = 0, binding = 2) uniform texture2D Normal;
-layout(set = 0, binding = 3) uniform texture2D Material;
-layout(set = 0, binding = 4) uniform texture2D Depth;
-
-
+layout (set = 0, binding = 1) uniform texture2D Diffuse;
+layout (set = 0, binding = 2) uniform texture2D Normal;
+layout (set = 0, binding = 3) uniform texture2D Material;
+layout (set = 0, binding = 4) uniform texture2D Depth;
+layout (std140, binding = 5) uniform shadowUBO {
+    mat4 view;
+    mat4 proj;
+    mat4 vp;
+    vec3 center;
+    float _pad0;
+    vec2 NearFarPlanes;
+    vec2 _pad1;
+} shadowUbo;
+layout (set = 0, binding = 6) uniform texture2D Shadow;
 
 vec3 Uncharted2Tonemap(vec3 x) {
     float A = 0.15;
@@ -159,8 +166,7 @@ void main() {
         kD *= 1.0 - metallic;
 
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI +
-        specular) * radiance * NdotL;
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
     for (int i = 0; i < MAX_DIRECTIONAL_LIGHTS; ++i) {
@@ -184,14 +190,22 @@ void main() {
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
+    vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
+    lightSpacePosition /= lightSpacePosition.w;
+    vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
+    float shadowDepth = texture(sampler2D(Shadow,shadowSampler),shadowMapUV.xy).r;
 
 
     vec3 ambient = vec3(0.03) * albedo;
-    vec3 color = ambient + Lo;
+    vec3 color = ambient + Lo * shadowDepth;
 
     // Gamma correction
     color = ToneMapUncharted2(color);
     color = pow(color, vec3(1.0 / 2.2));
+
+
+
+
 
     // Debug light vector
     outColor = vec4(color, 1.0);

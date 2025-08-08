@@ -195,7 +195,7 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 	imageInfo.samples = vk::SampleCountFlagBits::e1;
 	imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-	ImageFactory::CreateImage(Allocator,m_DepthImage,imageInfo);
+	ImageFactory::CreateImage(m_Device,Allocator,m_DepthImage,imageInfo, "DepthImage");
 
 	m_DepthImageView = ImageFactory::CreateImageView(
 			m_Device,m_DepthImage.image,
@@ -208,12 +208,12 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 
 	AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
-	VmaAllocatorsDeletionQueue.emplace_back([Allocator, tracker = AllocationTracker, view = m_DepthImageView, image = m_DepthImage, this](VmaAllocator) {
-		tracker->UntrackImageView(view);
-		vkDestroyImageView(*m_Device, view, nullptr);
+	VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator Alloc) {
+		AllocationTracker->UntrackImageView(m_DepthImageView);
+		vkDestroyImageView(*m_Device, m_DepthImageView, nullptr);
 
-		tracker->UntrackAllocation(image.allocation);
-		vmaDestroyImage(Allocator, image.image, image.allocation);
+		AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
+		vmaDestroyImage(Alloc, m_DepthImage.image, m_DepthImage.allocation);
 	});
 }
 

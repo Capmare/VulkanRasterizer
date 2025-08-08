@@ -111,17 +111,18 @@ void VulkanWindow::UpdateUBO() {
 }
 
 void VulkanWindow::UpdateShadowUBO() {
-    glm::vec3 lightDir = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+    // use the first directional light in your array
+    glm::vec3 lightDir = glm::normalize(glm::vec3(m_DirectionalLights[0].Direction));
 
     glm::vec3 sceneMin, sceneMax;
     std::tie(sceneMin, sceneMax) = VulkanMath::ComputeSceneAABB(m_Meshes);
     glm::vec3 sceneCenter = 0.5f * (sceneMin + sceneMax);
 
-    std::array<glm::vec3, 8> corners = VulkanMath::GetAABBCorners(sceneMin, sceneMax);
+    auto corners = VulkanMath::GetAABBCorners(sceneMin, sceneMax);
 
-    float minProj = std::numeric_limits<float>::infinity();
+    float minProj =  std::numeric_limits<float>::infinity();
     float maxProj = -std::numeric_limits<float>::infinity();
-    for (auto &c: corners) {
+    for (auto& c : corners) {
         float p = glm::dot(c, lightDir);
         minProj = std::min(minProj, p);
         maxProj = std::max(maxProj, p);
@@ -132,46 +133,40 @@ void VulkanWindow::UpdateShadowUBO() {
 
     glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
     glm::vec3 up = (std::abs(glm::dot(lightDir, worldUp)) > 0.99f)
-                       ? glm::vec3(0.0f, 0.0f, 1.0f)
-                       : worldUp;
+                  ? glm::vec3(0.0f, 0.0f, 1.0f)
+                  : worldUp;
 
     glm::mat4 lightView = glm::lookAt(lightPos, sceneCenter, up);
 
-    glm::vec3 minLS(std::numeric_limits<float>::infinity());
-    glm::vec3 maxLS(-std::numeric_limits<float>::infinity());
-    for (auto &c: corners) {
+    glm::vec3 minLS( std::numeric_limits<float>::infinity() );
+    glm::vec3 maxLS(-std::numeric_limits<float>::infinity() );
+    for (auto& c : corners) {
         glm::vec3 ls = glm::vec3(lightView * glm::vec4(c, 1.0f));
         minLS = glm::min(minLS, ls);
         maxLS = glm::max(maxLS, ls);
     }
 
-
     float nearPlane = -maxLS.z;
-    float farPlane = -minLS.z;
+    float farPlane  = -minLS.z;
 
     glm::mat4 lightProj = kClipBias * glm::ortho(
-                              minLS.x, maxLS.x,
-                              minLS.y, maxLS.y,
-                              nearPlane, farPlane
-                          );
+        minLS.x, maxLS.x,
+        minLS.y, maxLS.y,
+        nearPlane, farPlane
+    );
 
-    struct ShadowUBO {
-        glm::mat4 view;
-        glm::mat4 proj;
-        glm::mat4 vp;
-        glm::vec3 sceneCenter;
-        float padding;
-        glm::vec2 depthNF;
-    } smvp;
 
-    smvp.view = lightView;
-    smvp.proj = lightProj;
-    smvp.vp = lightProj * lightView;
-    smvp.sceneCenter = sceneCenter;
-    smvp.depthNF = glm::vec2(nearPlane, farPlane);
+    ShadowMVP smvp{};
+
+    smvp.view        = lightView;
+    smvp.proj        = lightProj;
+    smvp.vp          = lightProj * lightView;
+    smvp.center = sceneCenter;
+    smvp.NearFarPlanes     = glm::vec2(nearPlane, farPlane);
 
     Buffer::UploadData(m_ShadowUBOBufferInfo, &smvp, sizeof(smvp));
 }
+
 
 
 void VulkanWindow::CreateSurface() {
@@ -321,6 +316,8 @@ void VulkanWindow::InitVulkan() {
             .AddBinding(4, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(5, vk::DescriptorType::eUniformBuffer,
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
+            .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
+
             .Build()
         )
     );
@@ -427,7 +424,8 @@ void VulkanWindow::InitVulkan() {
                                  m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     m_ShadowPass = std::make_unique<ShadowPass>(*m_Device, m_CommandBuffers);
-
+    m_ShadowPass->CreateShadowResources(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(), 1024,
+                                           1024);
     LoadMesh();
 
     m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
@@ -438,6 +436,8 @@ void VulkanWindow::InitVulkan() {
                         static_cast<uint32_t>(m_ImageResource.size()))
             .AddBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
             .AddBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
+            .AddBinding(4, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eFragment)
+
             .Build()
         )
     );
@@ -448,12 +448,13 @@ void VulkanWindow::InitVulkan() {
         std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
         std::make_pair(m_DirectionalLightBufferInfo, static_cast<uint32_t>(m_DirectionalLights.size())),
         m_ImageResource,
-        m_SwapChainImageViews
+        m_SwapChainImageViews, m_ShadowPass->GetSampler()
     );
 
 
+
     m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
-                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo);
+                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo, m_ShadowPass->GetImageView());
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
@@ -480,15 +481,24 @@ void VulkanWindow::InitVulkan() {
     m_ColorPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_ShadowPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 
-    m_ShadowPass->CreateShadowResources(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(), 1024,
-                                        1024);
+
 
     CreateCommandBuffers();
 
+
+    PrepareFrame();
+
     BeginCommandBuffer();
-    UpdateShadowUBO();
-    m_ShadowPass->DoPass(m_CurrentFrame, 1024, 1024);
+        UpdateShadowUBO();
+        m_ShadowPass->DoPass(m_CurrentFrame, 1024, 1024);
     EndCommandBuffer();
+    SubmitFrame();
+    uint32_t imageIndex = AcquireSwapchainImage();
+    PresentFrame(imageIndex);
+
+
+
+
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
         Buffer::Destroy(m_VmaAllocator, m_UniformBufferInfo.m_Buffer, m_UniformBufferInfo.m_Allocation,
@@ -506,7 +516,6 @@ void VulkanWindow::InitVulkan() {
 
 void VulkanWindow::DrawFrame() {
     UpdateUBO();
-
     int width, height;
     glfwGetFramebufferSize(m_Window, &width, &height);
     m_CurrentScreenSize = glm::vec2(width, height);
@@ -542,8 +551,22 @@ void VulkanWindow::DrawFrame() {
         vk::PipelineStageFlagBits::eFragmentShader
     );
 
+
+
+
     m_GBufferPass->DoPass(m_DepthPass->GetImageView(), m_CurrentFrame, width, height);
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
+
+
+    ImageFactory::ShiftImageLayout(
+*m_CommandBuffers[m_CurrentFrame],
+m_ShadowPass->GetImage(),
+vk::ImageLayout::eDepthReadOnlyOptimal,
+vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+vk::AccessFlagBits::eShaderRead,
+vk::PipelineStageFlagBits::eLateFragmentTests,
+vk::PipelineStageFlagBits::eFragmentShader
+);
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
@@ -580,7 +603,8 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 
     m_DepthPass->RecreateImage(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
                                std::get<1>(m_DepthPass->GetFormat()), width, height);
-    m_GBufferPass->RecreateGBuffer(m_VmaAllocator, m_AllocationTracker.get(), width, height);
+    m_GBufferPass->RecreateGBuffer(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
+                                 m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     auto transitionCmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
     transitionCmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
@@ -603,10 +627,10 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
         std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
         std::make_pair(m_DirectionalLightBufferInfo, static_cast<uint32_t>(m_DirectionalLights.size())),
         m_ImageResource,
-        m_SwapChainImageViews
+        m_SwapChainImageViews, m_ShadowPass->GetSampler()
     );
     m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
-                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo);
+                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo, m_ShadowPass->GetImageView());
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);

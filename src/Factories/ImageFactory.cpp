@@ -345,7 +345,8 @@ VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Im
     return imageView;
 }
 
-void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo) {
+void ImageFactory::CreateImage(const vk::raii::Device &device, VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo, const std::
+                               string &name) {
     VkImage img = VK_NULL_HANDLE;
     VkImageCreateInfo imgInfo{static_cast<VkImageCreateInfo>(imageInfo)};
     VmaAllocationCreateInfo vmaAllocationCreateInfo{};
@@ -354,6 +355,15 @@ void ImageFactory::CreateImage(VmaAllocator Allocator, ImageResource &Image, vk:
 
     Image.image = img;
     Image.imageLayout = vk::ImageLayout::eUndefined;
+
+
+    vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+    nameInfo.pObjectName = name.c_str();
+    nameInfo.objectType = vk::ObjectType::eImage;
+    nameInfo.objectHandle = uint64_t(&*Image.image);
+    device.setDebugUtilsObjectNameEXT(nameInfo);
+
+
 }
 
 void ImageFactory::ShiftImageLayout(

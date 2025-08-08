@@ -42,7 +42,8 @@ public:
     void SetMeshes(const std::vector<Mesh>& Meshes) { m_Meshes = Meshes; };
     void CreatePipeline(uint32_t ImageResourceSize, const vk::Format &DepthFormat);
 
-	void RecreateGBuffer(VmaAllocator Allocator, ResourceTracker *AllocationTracker, uint32_t width, uint32_t height);
+	void RecreateGBuffer(VmaAllocator Allocator, std::deque<std::function<void(VmaAllocator)>> &VmaAllocatorsDeletionQueue, ResourceTracker *
+	                     AllocationTracker, uint32_t width, uint32_t height);
 
 	// returns diffuse normal material
 	std::tuple<VkImageView,VkImageView,VkImageView> GetImageViews();
