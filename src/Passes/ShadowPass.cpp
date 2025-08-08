@@ -239,17 +239,12 @@ void ShadowPass::CreateShadowResources(uint32_t Lights,
         VkImage imageHandle = m_ShadowImageResource[idx].image;
         VkImageView viewHandle = m_ShadowImageView[idx];
 
-        deletionQueue.emplace_back(
-            [allocation, imageHandle, viewHandle, device = *m_Device, tracker = tracker]
-    (VmaAllocator alloc) {
-                // destroy the image view
-                tracker->UntrackImageView(viewHandle);
-                vkDestroyImageView(device, viewHandle, nullptr);
+        deletionQueue.emplace_back([=](VmaAllocator Alloc) {
+            tracker->UntrackImageView(m_ShadowImageView[idx]);
+            vkDestroyImageView(*m_Device, m_ShadowImageView[idx], nullptr);
 
-                // destroy the image + free its allocation in one call
-                vmaDestroyImage(alloc, imageHandle, allocation);
-                tracker->UntrackAllocation(allocation);
-            }
-        );
+            tracker->UntrackAllocation(m_ShadowImageResource[idx].allocation);
+            vmaDestroyImage(Alloc, m_ShadowImageResource[idx].image, m_ShadowImageResource[idx].allocation);
+        });
     }
 }

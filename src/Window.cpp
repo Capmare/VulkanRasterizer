@@ -160,9 +160,6 @@ void VulkanWindow::UpdateShadowUBO(uint32_t LightIdx) {
 
     smvp.view = lightView;
     smvp.proj = lightProj;
-    smvp.vp = lightProj * lightView;
-    smvp.center = sceneCenter;
-    smvp.NearFarPlanes = glm::vec2(nearPlane, farPlane);
 
     Buffer::UploadData(m_ShadowUBOBufferInfo, &smvp, sizeof(smvp));
 }

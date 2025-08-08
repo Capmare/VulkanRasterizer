@@ -51,11 +51,6 @@ layout (set = 0, binding = 4) uniform texture2D Depth;
 layout (std140, binding = 5) uniform shadowUBO {
     mat4 view;
     mat4 proj;
-    mat4 vp;
-    vec3 center;
-    float _pad0;
-    vec2 NearFarPlanes;
-    vec2 _pad1;
 } shadowUbo;
 
 layout (set = 0, binding = 6) uniform texture2D Shadow[MAX_DIRECTIONAL_LIGHTS];

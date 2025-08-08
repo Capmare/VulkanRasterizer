@@ -216,6 +216,8 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
         vmaDestroyImage(Alloc, m_GBufferDiffuse.image, m_GBufferDiffuse.allocation);
         vmaDestroyImage(Alloc, m_GBufferNormals.image, m_GBufferNormals.allocation);
         vmaDestroyImage(Alloc, m_GBufferMaterial.image, m_GBufferMaterial.allocation);
+
+
     });
 }
 

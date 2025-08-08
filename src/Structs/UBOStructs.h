@@ -16,9 +16,4 @@ struct alignas(16)  MVP {
 struct alignas(16)  ShadowMVP {
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
-    alignas(16) glm::mat4 vp;
-    alignas(16) glm::vec3 center;
-    float _pad0;
-    alignas(16) glm::vec2 NearFarPlanes;
-    glm::vec2 _pad1;
 };
