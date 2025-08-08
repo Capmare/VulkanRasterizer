@@ -159,7 +159,8 @@ void main() {
         kD *= 1.0 - metallic;
 
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+        Lo += (kD * albedo / PI +
+        specular) * radiance * NdotL;
     }
 
     for (int i = 0; i < MAX_DIRECTIONAL_LIGHTS; ++i) {

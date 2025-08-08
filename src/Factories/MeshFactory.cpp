@@ -47,6 +47,9 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
             // Process vertices
             std::vector<Vertex> vertices;
             vertices.reserve(ai_mesh->mNumVertices);
+            std::vector<glm::vec3> worldPos;
+            worldPos.reserve(ai_mesh->mNumVertices);
+
             aiMatrix4x4 transform = currentScene->mRootNode->mTransformation;
 
             for (unsigned int v = 0; v < ai_mesh->mNumVertices; ++v) {
@@ -73,6 +76,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                 }
 
                 vertices.push_back(vert);
+                worldPos.push_back(vert.pos);
             }
 
             // Process indices
@@ -109,7 +113,7 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                 allocator, deletionQueue, commandBuffer, graphicsQueue,
                 vertices, indices, allocTracker, "Mesh");
             meshObj.m_Material = material;
-
+            meshObj.m_Positions = std::move(worldPos);
             meshes.push_back(meshObj);
         }
 
