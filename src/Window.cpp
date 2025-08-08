@@ -120,9 +120,9 @@ void VulkanWindow::UpdateShadowUBO() {
 
     auto corners = VulkanMath::GetAABBCorners(sceneMin, sceneMax);
 
-    float minProj =  std::numeric_limits<float>::infinity();
+    float minProj = std::numeric_limits<float>::infinity();
     float maxProj = -std::numeric_limits<float>::infinity();
-    for (auto& c : corners) {
+    for (auto &c: corners) {
         float p = glm::dot(c, lightDir);
         minProj = std::min(minProj, p);
         maxProj = std::max(maxProj, p);
@@ -133,40 +133,39 @@ void VulkanWindow::UpdateShadowUBO() {
 
     glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
     glm::vec3 up = (std::abs(glm::dot(lightDir, worldUp)) > 0.99f)
-                  ? glm::vec3(0.0f, 0.0f, 1.0f)
-                  : worldUp;
+                       ? glm::vec3(0.0f, 0.0f, 1.0f)
+                       : worldUp;
 
     glm::mat4 lightView = glm::lookAt(lightPos, sceneCenter, up);
 
-    glm::vec3 minLS( std::numeric_limits<float>::infinity() );
-    glm::vec3 maxLS(-std::numeric_limits<float>::infinity() );
-    for (auto& c : corners) {
+    glm::vec3 minLS(std::numeric_limits<float>::infinity());
+    glm::vec3 maxLS(-std::numeric_limits<float>::infinity());
+    for (auto &c: corners) {
         glm::vec3 ls = glm::vec3(lightView * glm::vec4(c, 1.0f));
         minLS = glm::min(minLS, ls);
         maxLS = glm::max(maxLS, ls);
     }
 
     float nearPlane = -maxLS.z;
-    float farPlane  = -minLS.z;
+    float farPlane = -minLS.z;
 
     glm::mat4 lightProj = kClipBias * glm::ortho(
-        minLS.x, maxLS.x,
-        minLS.y, maxLS.y,
-        nearPlane, farPlane
-    );
+                              minLS.x, maxLS.x,
+                              minLS.y, maxLS.y,
+                              nearPlane, farPlane
+                          );
 
 
     ShadowMVP smvp{};
 
-    smvp.view        = lightView;
-    smvp.proj        = lightProj;
-    smvp.vp          = lightProj * lightView;
+    smvp.view = lightView;
+    smvp.proj = lightProj;
+    smvp.vp = lightProj * lightView;
     smvp.center = sceneCenter;
-    smvp.NearFarPlanes     = glm::vec2(nearPlane, farPlane);
+    smvp.NearFarPlanes = glm::vec2(nearPlane, farPlane);
 
     Buffer::UploadData(m_ShadowUBOBufferInfo, &smvp, sizeof(smvp));
 }
-
 
 
 void VulkanWindow::CreateSurface() {
@@ -424,8 +423,8 @@ void VulkanWindow::InitVulkan() {
                                  m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     m_ShadowPass = std::make_unique<ShadowPass>(*m_Device, m_CommandBuffers);
-    m_ShadowPass->CreateShadowResources(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(), 1024,
-                                           1024);
+    m_ShadowPass->CreateShadowResources(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(), m_ShadowResolution.x, m_ShadowResolution.y);
+
     LoadMesh();
 
     m_GlobalDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
@@ -452,9 +451,9 @@ void VulkanWindow::InitVulkan() {
     );
 
 
-
     m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
-                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo, m_ShadowPass->GetImageView());
+                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo,
+                                               m_ShadowPass->GetImageView());
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
@@ -482,22 +481,18 @@ void VulkanWindow::InitVulkan() {
     m_ShadowPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
 
 
-
     CreateCommandBuffers();
 
 
     PrepareFrame();
 
     BeginCommandBuffer();
-        UpdateShadowUBO();
-        m_ShadowPass->DoPass(m_CurrentFrame, 1024, 1024);
+    UpdateShadowUBO();
+    m_ShadowPass->DoPass(m_CurrentFrame, m_ShadowResolution.x, m_ShadowResolution.y);
     EndCommandBuffer();
     SubmitFrame();
     uint32_t imageIndex = AcquireSwapchainImage();
     PresentFrame(imageIndex);
-
-
-
 
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
@@ -552,21 +547,19 @@ void VulkanWindow::DrawFrame() {
     );
 
 
-
-
     m_GBufferPass->DoPass(m_DepthPass->GetImageView(), m_CurrentFrame, width, height);
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
 
     ImageFactory::ShiftImageLayout(
-*m_CommandBuffers[m_CurrentFrame],
-m_ShadowPass->GetImage(),
-vk::ImageLayout::eDepthReadOnlyOptimal,
-vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-vk::AccessFlagBits::eShaderRead,
-vk::PipelineStageFlagBits::eLateFragmentTests,
-vk::PipelineStageFlagBits::eFragmentShader
-);
+        *m_CommandBuffers[m_CurrentFrame],
+        m_ShadowPass->GetImage(),
+        vk::ImageLayout::eDepthReadOnlyOptimal,
+        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits::eShaderRead,
+        vk::PipelineStageFlagBits::eLateFragmentTests,
+        vk::PipelineStageFlagBits::eFragmentShader
+    );
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
@@ -604,7 +597,7 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
     m_DepthPass->RecreateImage(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
                                std::get<1>(m_DepthPass->GetFormat()), width, height);
     m_GBufferPass->RecreateGBuffer(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
-                                 m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
+                                   m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     auto transitionCmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
     transitionCmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
@@ -630,7 +623,8 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
         m_SwapChainImageViews, m_ShadowPass->GetSampler()
     );
     m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
-                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo, m_ShadowPass->GetImageView());
+                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo,
+                                               m_ShadowPass->GetImageView());
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);

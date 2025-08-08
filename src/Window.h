@@ -42,6 +42,10 @@
 static constexpr uint32_t WIDTH = 800;
 static constexpr uint32_t HEIGHT = 600;
 
+static constexpr uint32_t ShadowResolutionMultiplier = 5;
+static constexpr glm::vec2 m_ShadowResolution{
+	1024 * ShadowResolutionMultiplier,1024 * ShadowResolutionMultiplier
+};
 
 class VulkanWindow
 {
@@ -228,6 +232,7 @@ private:
 	uint32_t m_CurrentFrame{ 0 };
 
 	glm::vec2 m_CurrentScreenSize{};
+
 
 
 };

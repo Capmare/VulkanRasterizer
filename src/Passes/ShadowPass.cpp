@@ -44,7 +44,7 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     rasterizer.cullMode = vk::CullModeFlagBits::eBack;
     rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
     rasterizer.depthBiasEnable = VK_TRUE; // depth bias for shadow mapping
-    rasterizer.depthBiasConstantFactor = 1.25f;
+    rasterizer.depthBiasConstantFactor = 1.5f;
     rasterizer.depthBiasClamp = 0.0f;
     rasterizer.depthBiasSlopeFactor = 1.75f;
 
@@ -106,7 +106,7 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
 }
 
 
-void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) const {
+void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {width, height}};
 
@@ -153,13 +153,14 @@ void ShadowPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) 
     //  transition shadow map image for sampling
     ImageFactory::ShiftImageLayout(
         *m_CommandBuffer[CurrentFrame],
-        *m_ShadowImageResource,
+        m_ShadowImageResource,
         vk::ImageLayout::eDepthAttachmentOptimal,
         vk::AccessFlagBits::eDepthStencilAttachmentWrite,
         vk::AccessFlagBits::eShaderRead,
         vk::PipelineStageFlagBits::eEarlyFragmentTests,
         vk::PipelineStageFlagBits::eFragmentShader
     );
+
 }
 
 
@@ -185,16 +186,14 @@ void ShadowPass::CreateShadowResources(
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    m_ShadowImageResource = std::make_unique<ImageResource>();
-    ImageFactory::CreateImage(m_Device,allocator, *m_ShadowImageResource, imageInfo, "Shadow Image");
+    ImageFactory::CreateImage(m_Device,allocator, m_ShadowImageResource, imageInfo, "Shadow Image");
 
 
-
-    if (tracker) tracker->TrackAllocation(m_ShadowImageResource->allocation, "ShadowMap");
+    if (tracker) tracker->TrackAllocation(m_ShadowImageResource.allocation, "ShadowMap");
 
     // Create image view
     vk::ImageViewCreateInfo viewInfo{};
-    viewInfo.image = m_ShadowImageResource->image;
+    viewInfo.image = m_ShadowImageResource.image;
     viewInfo.viewType = vk::ImageViewType::e2D;
     viewInfo.format = vk::Format::eD32Sfloat;
     viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
@@ -220,7 +219,7 @@ void ShadowPass::CreateShadowResources(
 
     m_ShadowImageView = ImageFactory::CreateImageView(
             m_Device,
-            m_ShadowImageResource->image,
+            m_ShadowImageResource.image,
             vk::Format::eD32Sfloat,
             vk::ImageAspectFlagBits::eDepth,
             tracker,
@@ -228,15 +227,15 @@ void ShadowPass::CreateShadowResources(
         );
 
 
-    m_ShadowImageResource->imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
-    m_ShadowImageResource->imageLayout = vk::ImageLayout::eUndefined;
+    m_ShadowImageResource.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
+    m_ShadowImageResource.imageLayout = vk::ImageLayout::eUndefined;
 
     deletionQueue.emplace_back([=](VmaAllocator alloc) {
-        tracker->UntrackAllocation(m_ShadowImageResource->allocation);
-        vmaDestroyImage(alloc, m_ShadowImageResource->image, m_ShadowImageResource->allocation);
+        tracker->UntrackAllocation(m_ShadowImageResource.allocation);
+        vmaDestroyImage(alloc, m_ShadowImageResource.image, m_ShadowImageResource.allocation);
 
         tracker->UntrackImageView(m_ShadowImageView);
-        vmaDestroyImage(alloc, m_ShadowImageResource->image, m_ShadowImageResource->allocation);
+        vmaDestroyImage(alloc, m_ShadowImageResource.image, m_ShadowImageResource.allocation);
     });
 
 }

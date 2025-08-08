@@ -193,7 +193,7 @@ void main() {
     vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
     lightSpacePosition /= lightSpacePosition.w;
     vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
-    float shadowDepth = texture(sampler2D(Shadow,shadowSampler),shadowMapUV.xy).r;
+    float shadowDepth = texture(sampler2DShadow(Shadow,shadowSampler),shadowMapUV).r;
 
 
     vec3 ambient = vec3(0.03) * albedo;
@@ -202,10 +202,6 @@ void main() {
     // Gamma correction
     color = ToneMapUncharted2(color);
     color = pow(color, vec3(1.0 / 2.2));
-
-
-
-
 
     // Debug light vector
     outColor = vec4(color, 1.0);
