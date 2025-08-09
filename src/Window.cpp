@@ -312,7 +312,8 @@ void VulkanWindow::InitVulkan() {
             .AddBinding(4, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(5, vk::DescriptorType::eUniformBuffer,
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
-            .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment, m_DirectionalLights.size())
+            .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment,
+                        m_DirectionalLights.size())
 
             .Build()
         )
@@ -420,7 +421,8 @@ void VulkanWindow::InitVulkan() {
                                  m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
 
     m_ShadowPass = std::make_unique<ShadowPass>(*m_Device, m_CommandBuffers);
-    m_ShadowPass->CreateShadowResources(static_cast<uint32_t>(m_DirectionalLights.size()), m_VmaAllocator, m_VmaAllocatorsDeletionQueue,
+    m_ShadowPass->CreateShadowResources(static_cast<uint32_t>(m_DirectionalLights.size()), m_VmaAllocator,
+                                        m_VmaAllocatorsDeletionQueue,
                                         m_AllocationTracker.get(), static_cast<uint32_t>(m_ShadowResolution.x),
                                         static_cast<uint32_t>(m_ShadowResolution.y));
 
@@ -484,16 +486,29 @@ void VulkanWindow::InitVulkan() {
     CreateCommandBuffers();
 
 
-    for (const auto& [idx, light] : std::ranges::views::enumerate(m_DirectionalLights)) {
+    for (const auto &[idx, light]: std::ranges::views::enumerate(m_DirectionalLights)) {
         PrepareFrame();
         BeginCommandBuffer();
         UpdateShadowUBO(static_cast<uint32_t>(idx));
-        m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x), static_cast<uint32_t>(m_ShadowResolution.y));
+
+
+
+        m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x),
+                             static_cast<uint32_t>(m_ShadowResolution.y));
+
+        ImageFactory::ShiftImageLayout(
+                    *m_CommandBuffers[m_CurrentFrame],
+                    m_ShadowPass->GetImage()[idx],
+                    vk::ImageLayout::eDepthAttachmentOptimal,
+                    vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+                    vk::AccessFlagBits::eShaderRead,
+                    vk::PipelineStageFlagBits::eLateFragmentTests,
+                    vk::PipelineStageFlagBits::eFragmentShader
+                );
         EndCommandBuffer();
-        SubmitFrame();
-        uint32_t imageIndex = AcquireSwapchainImage();
-        PresentFrame(imageIndex);
-    }
+        SubmitOffscreen();
+        PresentFrame(0);
+        }
 
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
@@ -552,17 +567,7 @@ void VulkanWindow::DrawFrame() {
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
 
-    for (auto &img: m_ShadowPass->GetImage()) {
-        ImageFactory::ShiftImageLayout(
-            *m_CommandBuffers[m_CurrentFrame],
-            img,
-            vk::ImageLayout::eDepthReadOnlyOptimal,
-            vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-            vk::AccessFlagBits::eShaderRead,
-            vk::PipelineStageFlagBits::eLateFragmentTests,
-            vk::PipelineStageFlagBits::eFragmentShader
-        );
-    }
+
 
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
@@ -645,7 +650,7 @@ void VulkanWindow::PrepareFrame() {
 uint32_t VulkanWindow::AcquireSwapchainImage() const {
     vk::AcquireNextImageInfoKHR acquireInfo{};
     acquireInfo.swapchain = **m_SwapChain;
-    acquireInfo.timeout = UINT64_MAX;
+    acquireInfo.timeout = 1'000'000'000ULL;
     acquireInfo.semaphore = *m_ImageAvailableSemaphore;
     acquireInfo.deviceMask = 1;
 
@@ -655,6 +660,9 @@ uint32_t VulkanWindow::AcquireSwapchainImage() const {
 
     return result.second;
 }
+
+
+
 
 void VulkanWindow::BeginCommandBuffer() const {
     m_CommandBuffers[m_CurrentFrame]->reset();
@@ -695,6 +703,23 @@ void VulkanWindow::SubmitFrame() const {
     submitInfo.setSignalSemaphores(signalSemaphores);
 
     m_GraphicsQueue->submit(submitInfo, **m_RenderFinishedFence);
+}
+
+
+void VulkanWindow::SubmitOffscreen() const {
+
+    vk::SubmitInfo submitInfo{};
+    vk::Semaphore waitSemaphores[] = {*m_ImageAvailableSemaphore};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    vk::Semaphore signalSemaphores[] = {*m_RenderFinishedSemaphore};
+
+    vk::CommandBuffer cmd = *m_CommandBuffers[m_CurrentFrame];
+    submitInfo.setWaitDstStageMask(waitStages);
+    submitInfo.setCommandBuffers(cmd);
+    submitInfo.setSignalSemaphoreCount(0);
+    submitInfo.setWaitSemaphoreCount(0);
+
+    m_GraphicsQueue->submit(submitInfo,**m_RenderFinishedFence);
 }
 
 void VulkanWindow::PresentFrame(uint32_t imageIndex) const {

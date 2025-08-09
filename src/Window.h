@@ -79,6 +79,8 @@ private:
 
 	[[nodiscard]] uint32_t AcquireSwapchainImage() const;
 
+	void SubmitOffscreen() const;
+
 	void BeginCommandBuffer() const;
 
 	void TransitionInitialLayouts(uint32_t imageIndex);

@@ -1,6 +1,7 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: require
 
+
 //#define CAMERA_PRESET_SUNNY16
 #define CAMERA_PRESET_INDOOR
 
