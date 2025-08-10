@@ -251,6 +251,251 @@ void VulkanWindow::ProcessInput(GLFWwindow *window, float deltaTime) {
     }
 }
 
+void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, ImageResource &inImage,
+                                   const vk::ImageView &inImageView, vk::Sampler sampler,
+                                   ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews) {
+
+
+    m_DescriptorSetFactory->ResetFactory();
+
+    vk::raii::DescriptorSetLayout dsLayout = m_DescriptorSetFactory->AddBinding(
+                0, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eFragment)
+            .AddBinding(1, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
+            .Build();
+
+
+
+    vk::PushConstantRange pushConstantRange{};
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(glm::mat4x4) * 2;
+    pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+    vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &*dsLayout;
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+
+    vk::DescriptorSetAllocateInfo dsAllocInfo{};
+    dsAllocInfo.descriptorPool = m_DescriptorSets->GetPool();
+    dsAllocInfo.descriptorSetCount = 1;
+    dsAllocInfo.pSetLayouts = &*dsLayout;
+
+    auto vec = m_Device->allocateDescriptorSets(dsAllocInfo);
+    vk::DescriptorSet ds{vec.front()};
+
+
+    vk::DescriptorImageInfo samplerInfo{};
+    samplerInfo.sampler = sampler;
+
+    vk::DescriptorImageInfo imageViewInfo{};
+    imageViewInfo.imageView = inImageView;
+    imageViewInfo.imageLayout = inImage.imageLayout;
+
+
+    vk::WriteDescriptorSet samplerDescriptorSet{};
+    samplerDescriptorSet.descriptorCount = 1;
+    samplerDescriptorSet.dstSet = ds;
+    samplerDescriptorSet.dstBinding = 0;
+    samplerDescriptorSet.dstArrayElement = 0;
+    samplerDescriptorSet.pImageInfo = &samplerInfo;
+    samplerDescriptorSet.descriptorType = vk::DescriptorType::eSampler;
+
+
+    vk::WriteDescriptorSet imageViewDescriptorSet{};
+    imageViewDescriptorSet.descriptorCount = 1;
+    imageViewDescriptorSet.dstSet = ds;
+    imageViewDescriptorSet.dstBinding = 1;
+    imageViewDescriptorSet.dstArrayElement = 0;
+    imageViewDescriptorSet.pImageInfo = &imageViewInfo;
+    imageViewDescriptorSet.descriptorType = vk::DescriptorType::eSampledImage;
+
+    m_Device->updateDescriptorSets({samplerDescriptorSet, imageViewDescriptorSet}, {});
+
+    vk::raii::PipelineLayout pipelineLayout{std::move(m_Device->createPipelineLayout(pipelineLayoutCreateInfo))};
+
+    std::unique_ptr<PipelineFactory> GraphicsPipelineFactory = std::make_unique<PipelineFactory>(*m_Device);
+
+    // Depth stencil
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+    depthStencil.depthCompareOp = vk::CompareOp::eEqual;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+
+    // Color blend attachment
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+            vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    // Multisampling
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+
+    // Rasterizer
+    vk::PipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = vk::PolygonMode::eFill;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    // Input assembly
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    // Vertex input info
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+
+    // Shader stages
+    vk::PipelineShaderStageCreateInfo vertexStageInfo{};
+    vertexStageInfo.setStage(vk::ShaderStageFlagBits::eVertex);
+    vertexStageInfo.setModule(Shader[0]);
+    vertexStageInfo.setPName("main");
+
+    vk::PipelineShaderStageCreateInfo fragmentStageInfo{};
+    fragmentStageInfo.setStage(vk::ShaderStageFlagBits::eFragment);
+    fragmentStageInfo.setModule(Shader[1]);
+    fragmentStageInfo.setPName("main");
+
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {vertexStageInfo, fragmentStageInfo};
+
+    // Viewport state
+    vk::PipelineViewportStateCreateInfo viewportState{};
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = nullptr;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = nullptr;
+
+    // Formats
+    vk::Format colorFormat = vk::Format::eR32G32B32A32Sfloat;
+
+    vk::raii::Pipeline GraphicsPipeline = std::move(
+
+    GraphicsPipelineFactory
+            ->SetShaderStages(shaderStages)
+            .SetVertexInput(vertexInputInfo)
+            .SetInputAssembly(inputAssembly)
+            .SetRasterizer(rasterizer)
+            .SetMultisampling(multisampling)
+            .SetColorBlendAttachments({colorBlendAttachment})
+            .SetViewportState(viewportState)
+            .SetDynamicStates({vk::DynamicState::eScissor, vk::DynamicState::eViewport})
+            .SetDepthStencil(depthStencil)
+            .SetLayout(pipelineLayout)
+            .SetColorFormats({colorFormat})
+            .SetDepthFormat({})
+            .Build()
+
+    );
+
+
+    const glm::vec3 eye = glm::vec3(0.0f);
+
+    glm::mat4 captureViews[6] = {
+        glm::lookAt(eye, eye + glm::vec3(1, 0, 0), glm::vec3(0, -1, 0)), // +X
+        glm::lookAt(eye, eye + glm::vec3(-1, 0, 0), glm::vec3(0, -1, 0)), // -X
+        glm::lookAt(eye, eye + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1)), // +Y
+        glm::lookAt(eye, eye + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1)), // -Y
+        glm::lookAt(eye, eye + glm::vec3(0, 0, 1), glm::vec3(0, -1, 0)), // +Z
+        glm::lookAt(eye, eye + glm::vec3(0, 0, -1), glm::vec3(0, -1, 0)), // -Z
+    };
+
+    glm::mat4 captureProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+    captureProj[1][1] *= -1.0f;
+
+
+    auto cmd = m_Renderer->CreateCommandBuffer(*m_Device,*m_CmdPool);
+
+    vk::CommandBufferBeginInfo beginInfo{};
+    beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+
+    cmd.begin(beginInfo);
+
+
+
+
+
+    for (uint32_t idx = 0; idx < 6; idx++) {
+        ImageFactory::ShiftImageLayout(
+            cmd,
+            inImage,
+            vk::ImageLayout::eReadOnlyOptimal,
+            vk::AccessFlagBits::eNone,
+            vk::AccessFlagBits::eColorAttachmentRead,
+            vk::PipelineStageFlagBits::eNone,
+            vk::PipelineStageFlagBits::eColorAttachmentOutput
+        );
+
+        ImageFactory::ShiftImageLayout(
+            cmd,
+            outImage,
+            vk::ImageLayout::eColorAttachmentOptimal,
+            vk::AccessFlagBits::eNone,
+            vk::AccessFlagBits::eColorAttachmentWrite,
+            vk::PipelineStageFlagBits::eNone,
+            vk::PipelineStageFlagBits::eColorAttachmentOutput
+        );
+
+        vk::RenderingAttachmentInfo RenderAttchInfo{};
+        RenderAttchInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+        RenderAttchInfo.imageView = outImageViews[idx];
+        RenderAttchInfo.loadOp = vk::AttachmentLoadOp::eClear;
+        RenderAttchInfo.storeOp = vk::AttachmentStoreOp::eStore;
+        RenderAttchInfo.clearValue = {};
+
+        vk::RenderingInfo RenderingInfo{};
+        RenderingInfo.colorAttachmentCount = 1;
+        RenderingInfo.layerCount = 1;
+        RenderingInfo.pColorAttachments = &RenderAttchInfo;
+        RenderingInfo.pStencilAttachment = nullptr;
+        RenderingInfo.renderArea = vk::Rect2D{VkOffset2D{}, {inImage.extent.width / 4, inImage.extent.height / 2}};
+
+        vk::DescriptorSet hppDs = ds;
+
+        vk::Viewport viewport = {
+            0, 0, static_cast<float>(RenderingInfo.renderArea.extent.width),
+            static_cast<float>(RenderingInfo.renderArea.extent.height)
+        };
+        vk::Rect2D scissor = RenderingInfo.renderArea;
+
+
+        cmd.beginRendering(RenderingInfo);
+        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, GraphicsPipeline);
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {});
+
+        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, vk::ArrayProxy<const glm::mat4>{captureViews[idx]});
+        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), vk::ArrayProxy<const glm::mat4>{captureProj});
+        cmd.setViewport(0, viewport);
+        cmd.setScissor(0, scissor);
+
+        cmd.draw(36, 1, 0, 0);
+        cmd.endRendering();
+    }
+
+    cmd.end();
+
+    m_DescriptorSetFactory->ResetFactory();
+
+    vk::SubmitInfo submitInfo{};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &*cmd;
+
+    vk::FenceCreateInfo fenceInfo{};
+
+    auto fence= m_Device->createFence(fenceInfo);
+    m_GraphicsQueue->submit({submitInfo},fence);
+    m_Device->waitForFences({fence},true,UINT64_MAX);
+}
+
 void VulkanWindow::Run() {
     InitWindow();
     InitVulkan();
@@ -314,6 +559,7 @@ void VulkanWindow::InitVulkan() {
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
             .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment,
                         m_DirectionalLights.size())
+            .AddBinding(7, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
 
             .Build()
         )
@@ -381,6 +627,7 @@ void VulkanWindow::InitVulkan() {
 
     m_Sampler = std::make_unique<vk::raii::Sampler>(*m_Device, samplerInfo);
 
+
     // Create Swapchain and Depth Image
     m_SwapChain = std::make_unique<vk::raii::SwapchainKHR>(
         m_SwapChainFactory->Build_SwapChain(*m_Device, *m_PhysicalDevice, m_Surface, WIDTH, HEIGHT)
@@ -442,8 +689,69 @@ void VulkanWindow::InitVulkan() {
         )
     );
 
+
     m_DescriptorSets = std::make_unique<DescriptorSets>(*m_Device);
     m_DescriptorSets->CreateDescriptorPool(static_cast<uint32_t>(m_DirectionalLights.size()));
+
+
+    std::vector<vk::ShaderModule> CubemapSources;
+    auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/cubemapvert.spv",
+                                                            "shaders/cubemapfrag.spv");
+    for (auto &shader: ShaderModules) {
+        CubemapSources.emplace_back(std::move(shader));
+    }
+
+    std::unique_ptr<Buffer> imgBuffer = std::make_unique<Buffer>();
+
+    ImageResource hdrImage = ImageFactory::LoadHDRTexture(imgBuffer.get(),
+                                                          "circus_arena_4k.hdr",
+                                                          *m_Device,
+                                                          m_VmaAllocator,
+                                                          *m_CmdPool,
+                                                          *m_GraphicsQueue,
+                                                          vk::Format::eR32G32B32A32Sfloat,
+                                                          vk::ImageAspectFlagBits::eColor,
+                                                          m_AllocationTracker.get()
+    );
+
+    vk::ImageView imgView = ImageFactory::CreateImageView(*m_Device, hdrImage.image, hdrImage.format,
+                                                          hdrImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                          "hdr img view");
+
+
+    const uint32_t face = std::min(hdrImage.extent.width  / 3u,
+                               hdrImage.extent.height / 2u);
+
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent = vk::Extent3D{(hdrImage.extent.width / 4), (hdrImage.extent.height / 2), 1};
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 6;
+    imageInfo.format = vk::Format::eR32G32B32A32Sfloat;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+    imageInfo.flags = vk::ImageCreateFlagBits::eCubeCompatible;
+
+
+    ImageFactory::CreateImage(*m_Device, m_VmaAllocator, m_CubemapImage, imageInfo, "Cubemap image");
+    m_CubemapImage.imageAspectFlags = vk::ImageAspectFlagBits::eColor;
+
+
+
+    std::array<vk::ImageView,6> imageviews{};
+    for (size_t idx = 0; idx < 6; ++idx) {
+
+        imageviews[idx] = ImageFactory::CreateImageView(*m_Device,m_CubemapImage.image,m_CubemapImage.format,m_CubemapImage.imageAspectFlags,m_AllocationTracker.get(),"img view " + idx,idx);
+    }
+
+
+    RenderToCubemap(CubemapSources, hdrImage, imgView, *m_Sampler, m_CubemapImage,imageviews );
+
+
+
     m_DescriptorSets->CreateGlobalDescriptorSet(
         **m_GlobalDescriptorSetLayout, *m_Sampler,
         std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
@@ -492,23 +800,22 @@ void VulkanWindow::InitVulkan() {
         UpdateShadowUBO(static_cast<uint32_t>(idx));
 
 
-
         m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x),
                              static_cast<uint32_t>(m_ShadowResolution.y));
 
         ImageFactory::ShiftImageLayout(
-                    *m_CommandBuffers[m_CurrentFrame],
-                    m_ShadowPass->GetImage()[idx],
-                    vk::ImageLayout::eDepthAttachmentOptimal,
-                    vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-                    vk::AccessFlagBits::eShaderRead,
-                    vk::PipelineStageFlagBits::eLateFragmentTests,
-                    vk::PipelineStageFlagBits::eFragmentShader
-                );
+            *m_CommandBuffers[m_CurrentFrame],
+            m_ShadowPass->GetImage()[idx],
+            vk::ImageLayout::eDepthAttachmentOptimal,
+            vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+            vk::AccessFlagBits::eShaderRead,
+            vk::PipelineStageFlagBits::eLateFragmentTests,
+            vk::PipelineStageFlagBits::eFragmentShader
+        );
         EndCommandBuffer();
         SubmitOffscreen();
         PresentFrame(0);
-        }
+    }
 
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
@@ -565,9 +872,6 @@ void VulkanWindow::DrawFrame() {
 
     m_GBufferPass->DoPass(m_DepthPass->GetImageView(), m_CurrentFrame, width, height);
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
-
-
-
 
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
@@ -658,10 +962,9 @@ uint32_t VulkanWindow::AcquireSwapchainImage() const {
     if (result.first != vk::Result::eSuccess && result.first != vk::Result::eSuboptimalKHR)
         throw std::runtime_error("Failed to acquire swap chain image!");
 
+
     return result.second;
 }
-
-
 
 
 void VulkanWindow::BeginCommandBuffer() const {
@@ -707,7 +1010,6 @@ void VulkanWindow::SubmitFrame() const {
 
 
 void VulkanWindow::SubmitOffscreen() const {
-
     vk::SubmitInfo submitInfo{};
     vk::Semaphore waitSemaphores[] = {*m_ImageAvailableSemaphore};
     vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
@@ -719,7 +1021,7 @@ void VulkanWindow::SubmitOffscreen() const {
     submitInfo.setSignalSemaphoreCount(0);
     submitInfo.setWaitSemaphoreCount(0);
 
-    m_GraphicsQueue->submit(submitInfo,**m_RenderFinishedFence);
+    m_GraphicsQueue->submit(submitInfo, **m_RenderFinishedFence);
 }
 
 void VulkanWindow::PresentFrame(uint32_t imageIndex) const {

@@ -44,6 +44,8 @@ class DescriptorSets {
 
     // 0 frame 1 global
     std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t CurrentFrame) const { return { *(*m_FrameDescriptorSets)[CurrentFrame], *(*m_GlobalDescriptorSets)[CurrentFrame] }; };
+
+    vk::DescriptorPool GetPool() const {return *m_DescriptorPool; };
 private:
 
     const vk::raii::Device& m_Device;

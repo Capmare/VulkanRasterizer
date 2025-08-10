@@ -198,10 +198,10 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 	ImageFactory::CreateImage(m_Device,Allocator,m_DepthImage,imageInfo, "DepthImage");
 
 	m_DepthImageView = ImageFactory::CreateImageView(
-			m_Device,m_DepthImage.image,
-			DepthFormat,vk::ImageAspectFlagBits::eDepth,
-			AllocationTracker, "DepthImageView"
-			);
+		m_Device,m_DepthImage.image,
+		DepthFormat,vk::ImageAspectFlagBits::eDepth,
+		AllocationTracker, "DepthImageView"
+	);
 
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 	m_DepthImage.imageLayout = vk::ImageLayout::eUndefined;

@@ -38,6 +38,11 @@ public:
         const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat, vk::
         ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
 
+    static ImageResource LoadHDRTexture(Buffer *buff, const std::string &filename, const vk::raii::Device &device,
+                                 VmaAllocator allocator, const vk::raii::CommandPool &commandPool,
+                                 const vk::raii::Queue &graphicsQueue, vk::Format ColorFormat,
+                                 vk::ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
+
     ImageResource LoadTextureFromMemory(Buffer *buff, const unsigned char *data,
                                         size_t dataSize, const vk::raii::Device &device,
                                         VmaAllocator allocator,
@@ -45,8 +50,8 @@ public:
                                         ImageAspectFlagBits aspect, ResourceTracker *AllocationTracker);
 
 
-    static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ResourceTracker *
-                                       ResourceTracker, const std::string &Name);
+    static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ::ResourceTracker *
+                                       ResourceTracker, const std::string &Name, uint32_t BaseArrLayer = 0);
 
     static void CreateImage(const vk::raii::Device &device, VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo, const std
                             ::string &name);

@@ -123,6 +123,9 @@ private:
 
 	void ProcessInput(GLFWwindow *window, float deltaTime);
 
+	void RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, ImageResource &inImage, const vk::ImageView &inImageView, vk::Sampler
+	                     sampler, ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews);
+
 	GLFWwindow* m_Window{};
 
 	std::unique_ptr<InstanceFactory> m_InstanceFactory{};
@@ -197,6 +200,11 @@ private:
 
 	std::unique_ptr<DescriptorSets> m_DescriptorSets{};
 
+
+    ImageResource m_CubemapImage;
+
+
+
 	float cameraSpeed = 10.0f;
 	double lastFrameTime = 0.f;
 
@@ -221,11 +229,11 @@ private:
 	const std::vector<DirectionalLight> m_DirectionalLights =
 	{
 		{
-			glm::vec4(-.5f, -.5f, -0.f, 0.0f),
+			glm::vec4(-.5f, -.2f, -0.f, 0.0f),
 			glm::vec4(1.0f, 0.95f, 0.9f, 20.0f)
-		},
-		/*{
-			glm::vec4(-.25f, -.5f, -0.f, 0.0f),
+		}/*,
+		{
+			glm::vec4(-.5f, -.5f, -0.f, 0.0f),
 			glm::vec4(1.0f, 0.95f, 0.9f, 10.0f)
 		}*/
 	};
