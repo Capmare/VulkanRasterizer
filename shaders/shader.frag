@@ -6,7 +6,7 @@
 #define CAMERA_PRESET_INDOOR
 
 const float PI = 3.14159265359;
-const vec2 SHADOW_TEXEL_SIZE = vec2(1.0 / 1024.0);
+
 
 layout (location = 2) in vec2 inTexCoord;
 layout (location = 0) out vec4 outColor;
@@ -55,6 +55,7 @@ layout (std140, binding = 5) uniform shadowUBO {
 } shadowUbo;
 
 layout (set = 0, binding = 6) uniform texture2D Shadow[MAX_DIRECTIONAL_LIGHTS];
+layout (set = 0, binding = 7) uniform textureCube EnviromentMap;
 
 vec3 Uncharted2Tonemap(vec3 x) {
     float A = 0.15;
@@ -126,11 +127,32 @@ vec3 reconstructWorldPos(float depth, mat4 invProj) {
     return worldSpacePosition.xyz;
 }
 
+
+float sampleShadowPCF(texture2D shadowImg, sampler cmp, vec3 uvz, vec2 texelSize)
+{
+    float s = 0.0;
+    for (int x = -1; x <= 1; ++x)
+    for (int y = -1; y <= 1; ++y) {
+        vec2 off = vec2(x, y) * texelSize;
+        s += texture( sampler2DShadow(shadowImg, cmp),
+                      vec3(uvz.xy + off, uvz.z) );
+    }
+    return s / 9.0;
+}
+
 void main() {
     float depth = texelFetch(sampler2D(Depth, texSampler), ivec2(gl_FragCoord.xy), 0).r;
 
     // Reconstruct view-space position
-    vec3 worldPos = reconstructWorldPos(depth, inverse(ubo.proj));
+    vec3 worldPos;
+    worldPos = reconstructWorldPos(depth, inverse(ubo.proj));
+    if (depth >= 1.f)
+    {
+        const vec3 sampleDirection = normalize(worldPos.xyz);
+        outColor = vec4(texture(samplerCube(EnviromentMap,texSampler), sampleDirection).rgb,1.f);
+        return;
+
+    }
 
     vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
@@ -194,9 +216,9 @@ void main() {
         lightSpacePosition /= lightSpacePosition.w;
         vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
         //float bias = max(0.0005 * (1.0 - dot(N, L)), 0.00005);
-        float shadowDepth = texture(
-            sampler2DShadow(Shadow[i], shadowSampler),
-            vec3(shadowMapUV.xy, shadowMapUV.z));
+        ivec2 sz = textureSize(sampler2D(Shadow[i], shadowSampler), 0);
+        vec2 texelSize = 1.0 / vec2(sz);
+        float shadowDepth = sampleShadowPCF(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }

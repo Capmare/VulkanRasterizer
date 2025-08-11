@@ -462,12 +462,12 @@ ImageResource ImageFactory::LoadTextureFromMemory(
 
 
 VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ::ResourceTracker *
-                                          ResourceTracker, const std::string &Name, uint32_t BaseArrLayer) {
+                                          ResourceTracker, const std::string &Name, uint32_t BaseArrLayer, VkImageViewType ViewType) {
 
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     createInfo.image = Image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.viewType = ViewType;
     createInfo.format = static_cast<VkFormat>(Format);
 
 
@@ -513,13 +513,11 @@ void ImageFactory::CreateImage(const vk::raii::Device &device, VmaAllocator Allo
     Image.format = imageInfo.format;
 
 
-
     vk::DebugUtilsObjectNameInfoEXT nameInfo{};
     nameInfo.pObjectName = name.c_str();
     nameInfo.objectType = vk::ObjectType::eImage;
     nameInfo.objectHandle = uint64_t(&*Image.image);
     device.setDebugUtilsObjectNameEXT(nameInfo);
-
 
 }
 

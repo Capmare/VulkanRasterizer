@@ -46,9 +46,9 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     rasterizer.cullMode = vk::CullModeFlagBits::eBack;
     rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
     rasterizer.depthBiasEnable = VK_TRUE; // depth bias for shadow mapping
-    rasterizer.depthBiasConstantFactor = 1.25f;
+    rasterizer.depthBiasConstantFactor = 1.5f;
     rasterizer.depthBiasClamp = 0.0f;
-    rasterizer.depthBiasSlopeFactor = 1.75f;
+    rasterizer.depthBiasSlopeFactor = 2.f;
 
     // Input assembly
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -188,12 +188,12 @@ void ShadowPass::CreateShadowResources(uint32_t Lights,
     vk::SamplerCreateInfo samplerInfo{};
     samplerInfo.magFilter = vk::Filter::eLinear;
     samplerInfo.minFilter = vk::Filter::eLinear;
-    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eNearest;
     samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
     samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
     samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
     samplerInfo.compareEnable = VK_TRUE;
-    samplerInfo.compareOp = vk::CompareOp::eLess;
+    samplerInfo.compareOp = vk::CompareOp::eLessOrEqual;
     samplerInfo.borderColor = vk::BorderColor::eFloatOpaqueWhite;
     samplerInfo.maxAnisotropy = 1.0f;
 

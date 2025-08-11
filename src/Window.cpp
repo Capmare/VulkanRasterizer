@@ -556,7 +556,6 @@ void VulkanWindow::InitVulkan() {
             .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment,
                         m_DirectionalLights.size())
             .AddBinding(7, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
-
             .Build()
         )
     );
@@ -694,7 +693,6 @@ void VulkanWindow::InitVulkan() {
     auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/cubemapvert.spv",
                                                             "shaders/cubemapfrag.spv");
     for (auto &shader: ShaderModules) {
-
         vk::DebugUtilsObjectNameInfoEXT nameInfo{};
         nameInfo.pObjectName = "cubemap shader";
         nameInfo.objectType = vk::ObjectType::eShaderModule;
@@ -703,9 +701,7 @@ void VulkanWindow::InitVulkan() {
         m_Device->setDebugUtilsObjectNameEXT(nameInfo);
 
 
-
         CubemapSources.emplace_back(std::move(shader));
-
     }
 
     std::unique_ptr<Buffer> imgBuffer = std::make_unique<Buffer>();
@@ -720,14 +716,12 @@ void VulkanWindow::InitVulkan() {
                                                           vk::ImageAspectFlagBits::eColor,
                                                           m_AllocationTracker.get()
     );
+    m_AllocationTracker->TrackAllocation(hdrImage.allocation, "hdr image");
 
-    vk::ImageView imgView = ImageFactory::CreateImageView(*m_Device, hdrImage.image, hdrImage.format,
-                                                          hdrImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                          "hdr img view");
+    vk::ImageView hdrImageView = ImageFactory::CreateImageView(*m_Device, hdrImage.image, hdrImage.format,
+                                                               hdrImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                               "hdr img view");
 
-
-    const uint32_t face = std::min(hdrImage.extent.width / 3u,
-                                   hdrImage.extent.height / 2u);
 
     vk::ImageCreateInfo imageInfo{};
     imageInfo.imageType = vk::ImageType::e2D;
@@ -742,21 +736,30 @@ void VulkanWindow::InitVulkan() {
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
     imageInfo.flags = vk::ImageCreateFlagBits::eCubeCompatible;
 
-
     ImageFactory::CreateImage(*m_Device, m_VmaAllocator, m_CubemapImage, imageInfo, "Cubemap image");
     m_CubemapImage.imageAspectFlags = vk::ImageAspectFlagBits::eColor;
-
+    m_AllocationTracker->TrackAllocation(m_CubemapImage.allocation, "cubemap image");
 
     std::array<vk::ImageView, 6> imageviews{};
     for (size_t idx = 0; idx < 6; ++idx) {
         imageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
                                                         m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                        "img view " + idx, idx);
+                                                        "img view " + std::to_string(idx), idx);
     }
 
+    RenderToCubemap(CubemapSources, hdrImage, hdrImageView, *m_Sampler, m_CubemapImage, imageviews);
 
-    RenderToCubemap(CubemapSources, hdrImage, imgView, *m_Sampler, m_CubemapImage, imageviews);
+    m_AllocationTracker->UntrackImageView(hdrImageView);
+    vkDestroyImageView(**m_Device, hdrImageView, nullptr);
 
+    for (size_t idx = 0; idx < 6; ++idx) {
+        m_AllocationTracker->UntrackImageView(imageviews[idx]);
+        vkDestroyImageView(**m_Device, imageviews[idx], nullptr);
+    }
+
+    m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
+                                                       m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                       "CubemapImage", 0, VK_IMAGE_VIEW_TYPE_CUBE);
 
     m_DescriptorSets->CreateGlobalDescriptorSet(
         **m_GlobalDescriptorSetLayout, *m_Sampler,
@@ -766,10 +769,9 @@ void VulkanWindow::InitVulkan() {
         m_SwapChainImageViews, m_ShadowPass->GetSampler()
     );
 
-
     m_DescriptorSets->CreateFrameDescriptorSet(**m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
                                                m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo,
-                                               m_ShadowPass->GetImageView());
+                                               m_ShadowPass->GetImageView(), m_CubemapImageView);
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
@@ -823,6 +825,8 @@ void VulkanWindow::InitVulkan() {
     EndCommandBuffer();
 
 
+    m_AllocationTracker->UntrackAllocation(hdrImage.allocation);
+    vmaDestroyImage(m_VmaAllocator, hdrImage.image, hdrImage.allocation);
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
         Buffer::Destroy(m_VmaAllocator, m_UniformBufferInfo.m_Buffer, m_UniformBufferInfo.m_Allocation,
@@ -833,6 +837,15 @@ void VulkanWindow::InitVulkan() {
                         m_DirectionalLightBufferInfo.m_Allocation, m_AllocationTracker.get());
         Buffer::Destroy(m_VmaAllocator, m_ShadowUBOBufferInfo.m_Buffer, m_ShadowUBOBufferInfo.m_Allocation,
                         m_AllocationTracker.get());
+
+
+        m_AllocationTracker->UntrackImageView(m_CubemapImageView);
+        vkDestroyImageView(**m_Device, m_CubemapImageView, nullptr);
+
+        m_AllocationTracker->UntrackAllocation(m_CubemapImage.allocation);
+        vmaDestroyImage(m_VmaAllocator, m_CubemapImage.image, m_CubemapImage.allocation);
+
+
     });
 
     m_AllocationTracker->PrintAllocations();
@@ -869,12 +882,20 @@ void VulkanWindow::DrawFrame() {
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
     ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
-    m_DepthPass->GetImage(),
-    vk::ImageLayout::eReadOnlyOptimal,
-    vk::AccessFlagBits::eNone,
-    vk::AccessFlagBits::eColorAttachmentRead,
-    vk::PipelineStageFlagBits::eTopOfPipe,
-    vk::PipelineStageFlagBits::eColorAttachmentOutput);
+                                   m_DepthPass->GetImage(),
+                                   vk::ImageLayout::eReadOnlyOptimal,
+                                   vk::AccessFlagBits::eNone,
+                                   vk::AccessFlagBits::eColorAttachmentRead,
+                                   vk::PipelineStageFlagBits::eTopOfPipe,
+                                   vk::PipelineStageFlagBits::eColorAttachmentOutput);
+
+    ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
+                                   m_CubemapImage,
+                                   vk::ImageLayout::eReadOnlyOptimal,
+                                   vk::AccessFlagBits::eNone,
+                                   vk::AccessFlagBits::eColorAttachmentRead,
+                                   vk::PipelineStageFlagBits::eTopOfPipe,
+                                   vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
@@ -939,7 +960,7 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
     );
     m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
                                                m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo,
-                                               m_ShadowPass->GetImageView());
+                                               m_ShadowPass->GetImageView(), m_CubemapImageView);
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);

@@ -5,7 +5,8 @@
 #include "DescriptorSets.h"
 
 
-
+#include <complex.h>
+#include <complex.h>
 #include <ranges>
 
 #include "Factories/MeshFactory.h"
@@ -19,7 +20,9 @@ void DescriptorSets::CreateFrameDescriptorSet(
     const vk::ImageView &DepthImageView,
     const BufferInfo &UniformBufferInfo,
     const BufferInfo &ShadowBufferInfo,
-    const std::vector<vk::ImageView> &ShadowImageViews)
+    const std::vector<vk::ImageView> &ShadowImageViews,
+    const vk::ImageView& CubemapImage
+    )
 {
     // Allocate two descriptor sets
     vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = { FrameLayout, FrameLayout };
@@ -52,8 +55,6 @@ void DescriptorSets::CreateFrameDescriptorSet(
     MaterialImageInfo.imageView = std::get<2>(ColorImageViews);
     MaterialImageInfo.sampler = nullptr;
 
-
-
     vk::DescriptorImageInfo DepthImageInfo{};
     DepthImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
     DepthImageInfo.imageView = DepthImageView;
@@ -63,6 +64,11 @@ void DescriptorSets::CreateFrameDescriptorSet(
     shadowBufferInfo.buffer = ShadowBufferInfo.m_Buffer;
     shadowBufferInfo.offset = 0;
     shadowBufferInfo.range = sizeof(ShadowMVP);
+
+    vk::DescriptorImageInfo CubemapImageInfo{};
+    CubemapImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    CubemapImageInfo.imageView = CubemapImage;
+    CubemapImageInfo.sampler = nullptr;
 
     std::vector<vk::DescriptorImageInfo> shadowImageInfos;
     shadowImageInfos.reserve(ShadowImageViews.size());
@@ -147,6 +153,15 @@ void DescriptorSets::CreateFrameDescriptorSet(
         writeShadowTextures.pImageInfo = shadowImageInfos.data();
         writes.push_back(writeShadowTextures);
 
+        vk::WriteDescriptorSet writeCubemap{};
+        writeCubemap.dstSet = ds;
+        writeCubemap.dstBinding = 7;
+        writeCubemap.dstArrayElement = 0;
+        writeCubemap.descriptorCount = 1;
+        writeCubemap.descriptorType = vk::DescriptorType::eSampledImage;
+        writeCubemap.pImageInfo = &CubemapImageInfo;
+        writes.push_back(writeCubemap);
+
         m_Device.updateDescriptorSets(writes, {});
     }
 }
@@ -164,7 +179,7 @@ void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
 
     vk::DescriptorPoolSize TexturesPoolSize{};
     TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-    TexturesPoolSize.descriptorCount = 12 + DirectionalLights;
+    TexturesPoolSize.descriptorCount = 14 + DirectionalLights;
 
     vk::DescriptorPoolSize PoolSizeArr[] = {UboPoolSize, SamplerPoolSize, TexturesPoolSize};
 

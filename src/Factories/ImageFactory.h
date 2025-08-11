@@ -51,7 +51,7 @@ public:
 
 
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ::ResourceTracker *
-                                       ResourceTracker, const std::string &Name, uint32_t BaseArrLayer = 0);
+                                       ResourceTracker, const std::string &Name, uint32_t BaseArrLayer = 0,VkImageViewType ViewType = VK_IMAGE_VIEW_TYPE_2D);
 
     static void CreateImage(const vk::raii::Device &device, VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo, const std
                             ::string &name);

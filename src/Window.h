@@ -189,7 +189,6 @@ private:
 	std::unique_ptr<Buffer> m_Buffer{};
 
 	std::vector<vk::ImageView> m_SwapChainImageViews{};
-
 	// Refactoring
 	std::unique_ptr<Camera> m_Camera{};
 
@@ -202,6 +201,7 @@ private:
 
 
     ImageResource m_CubemapImage;
+	vk::ImageView m_CubemapImageView{};
 
 
 
