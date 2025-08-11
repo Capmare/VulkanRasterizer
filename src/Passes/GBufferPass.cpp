@@ -407,6 +407,14 @@ void GBufferPass::CreateModules() {
     auto GbufferShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/Gbuffervert.spv",
                                                                    "shaders/Gbufferfrag.spv");
     for (auto &shader: GbufferShaderModules) {
+
+        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+        nameInfo.pObjectName = "GBUFFER";
+        nameInfo.objectType = vk::ObjectType::eShaderModule;
+        nameInfo.objectHandle = uint64_t(&**shader);
+
+        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
+
         m_GBufferShaderModules.emplace_back(std::move(shader));
     }
 }

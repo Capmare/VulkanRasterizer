@@ -44,8 +44,18 @@ void DepthPass::ShiftLayout(const vk::raii::CommandBuffer &command_buffer) {
 }
 
 void DepthPass::DoPass(uint32_t CurrentFrame, uint32_t width, uint32_t height) {
+
+
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
+
+	ImageFactory::ShiftImageLayout(*m_CommandBuffer[CurrentFrame],
+	m_DepthImage,
+	vk::ImageLayout::eDepthAttachmentOptimal,
+	vk::AccessFlagBits::eNone,
+	vk::AccessFlagBits::eDepthStencilAttachmentWrite,
+	vk::PipelineStageFlagBits::eTopOfPipe,
+	vk::PipelineStageFlagBits::eEarlyFragmentTests);
 
     vk::RenderingAttachmentInfo depthOnlyAttachment{};
     depthOnlyAttachment.setImageView(m_DepthImageView);
@@ -232,6 +242,14 @@ void DepthPass::RecreateImage(VmaAllocator Allocator,std::deque<std::function<vo
 void DepthPass::CreateModules() {
     auto DepthShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/Depthvert.spv", "shaders/Depthfrag.spv");
     for (auto& shader : DepthShaderModules) {
+
+    	vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+    	nameInfo.pObjectName = "depth";
+    	nameInfo.objectType = vk::ObjectType::eShaderModule;
+    	nameInfo.objectHandle = uint64_t(&**shader);
+
+    	m_Device.setDebugUtilsObjectNameEXT(nameInfo);
+
         m_DepthShaderModules.emplace_back(std::move(shader));
     }
 }

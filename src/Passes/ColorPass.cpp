@@ -158,6 +158,13 @@ void ColorPass::CreateGraphicsPipeline() {
 void ColorPass::CreateModules() {
     auto ShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadervert.spv", "shaders/shaderfrag.spv");
     for (auto& shader : ShaderModules) {
+
+        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+        nameInfo.pObjectName = "color";
+        nameInfo.objectType = vk::ObjectType::eShaderModule;
+        nameInfo.objectHandle = uint64_t(&**shader);
+
+        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
         m_ColorShaderModules.emplace_back(std::move(shader));
     }
 }

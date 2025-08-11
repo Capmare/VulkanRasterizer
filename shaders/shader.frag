@@ -13,7 +13,7 @@ layout (location = 0) out vec4 outColor;
 
 
 layout (set = 1, binding = 0) uniform sampler texSampler;
-layout (set = 1, binding = 4) uniform samplerShadow shadowSampler;
+layout (set = 1, binding = 4) uniform sampler shadowSampler;
 layout (constant_id = 0) const uint TEXTURE_COUNT = 1u;
 layout (set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
@@ -193,9 +193,10 @@ void main() {
         vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.f);
         lightSpacePosition /= lightSpacePosition.w;
         vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5f + 0.5f, lightSpacePosition.z);
-        float bias = max(0.0005 * (1.0 - dot(N, L)), 0.00005);
-        float shadowDepth = texture(sampler2DShadow(Shadow[i], shadowSampler),
-                                    vec3(shadowMapUV.xy, shadowMapUV.z - bias));
+        //float bias = max(0.0005 * (1.0 - dot(N, L)), 0.00005);
+        float shadowDepth = texture(
+            sampler2DShadow(Shadow[i], shadowSampler),
+            vec3(shadowMapUV.xy, shadowMapUV.z));
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }

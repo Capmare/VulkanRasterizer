@@ -68,6 +68,18 @@ void ShadowPass::CreatePipeline(uint32_t shadowMapCount, vk::Format depthFormat)
     auto shadowShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadowvert.spv",
                                                                   "shaders/shadowfrag.spv");
 
+
+    for (auto& shader : shadowShaderModules) {
+        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+        nameInfo.pObjectName = "shadow";
+        nameInfo.objectType = vk::ObjectType::eShaderModule;
+        nameInfo.objectHandle = uint64_t(&**shader);
+
+        m_Device.setDebugUtilsObjectNameEXT(nameInfo);
+    }
+
+
+
     vk::PipelineShaderStageCreateInfo vertexStageInfo{};
     vertexStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
     vertexStageInfo.module = *shadowShaderModules[0];

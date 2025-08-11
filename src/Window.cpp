@@ -254,15 +254,12 @@ void VulkanWindow::ProcessInput(GLFWwindow *window, float deltaTime) {
 void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, ImageResource &inImage,
                                    const vk::ImageView &inImageView, vk::Sampler sampler,
                                    ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews) {
-
-
     m_DescriptorSetFactory->ResetFactory();
 
     vk::raii::DescriptorSetLayout dsLayout = m_DescriptorSetFactory->AddBinding(
                 0, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(1, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .Build();
-
 
 
     vk::PushConstantRange pushConstantRange{};
@@ -380,20 +377,20 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
     vk::raii::Pipeline GraphicsPipeline = std::move(
 
-    GraphicsPipelineFactory
-            ->SetShaderStages(shaderStages)
-            .SetVertexInput(vertexInputInfo)
-            .SetInputAssembly(inputAssembly)
-            .SetRasterizer(rasterizer)
-            .SetMultisampling(multisampling)
-            .SetColorBlendAttachments({colorBlendAttachment})
-            .SetViewportState(viewportState)
-            .SetDynamicStates({vk::DynamicState::eScissor, vk::DynamicState::eViewport})
-            .SetDepthStencil(depthStencil)
-            .SetLayout(pipelineLayout)
-            .SetColorFormats({colorFormat})
-            .SetDepthFormat({})
-            .Build()
+        GraphicsPipelineFactory
+        ->SetShaderStages(shaderStages)
+        .SetVertexInput(vertexInputInfo)
+        .SetInputAssembly(inputAssembly)
+        .SetRasterizer(rasterizer)
+        .SetMultisampling(multisampling)
+        .SetColorBlendAttachments({colorBlendAttachment})
+        .SetViewportState(viewportState)
+        .SetDynamicStates({vk::DynamicState::eScissor, vk::DynamicState::eViewport})
+        .SetDepthStencil(depthStencil)
+        .SetLayout(pipelineLayout)
+        .SetColorFormats({colorFormat})
+        .SetDepthFormat({})
+        .Build()
 
     );
 
@@ -413,15 +410,12 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
     captureProj[1][1] *= -1.0f;
 
 
-    auto cmd = m_Renderer->CreateCommandBuffer(*m_Device,*m_CmdPool);
+    auto cmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
 
     vk::CommandBufferBeginInfo beginInfo{};
     beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
 
     cmd.begin(beginInfo);
-
-
-
 
 
     for (uint32_t idx = 0; idx < 6; idx++) {
@@ -472,8 +466,10 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, GraphicsPipeline);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {});
 
-        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, vk::ArrayProxy<const glm::mat4>{captureViews[idx]});
-        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), vk::ArrayProxy<const glm::mat4>{captureProj});
+        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0,
+                          vk::ArrayProxy<const glm::mat4>{captureViews[idx]});
+        cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4),
+                          vk::ArrayProxy<const glm::mat4>{captureProj});
         cmd.setViewport(0, viewport);
         cmd.setScissor(0, scissor);
 
@@ -491,9 +487,9 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
     vk::FenceCreateInfo fenceInfo{};
 
-    auto fence= m_Device->createFence(fenceInfo);
-    m_GraphicsQueue->submit({submitInfo},fence);
-    m_Device->waitForFences({fence},true,UINT64_MAX);
+    auto fence = m_Device->createFence(fenceInfo);
+    m_GraphicsQueue->submit({submitInfo}, fence);
+    m_Device->waitForFences({fence}, true,UINT64_MAX);
 }
 
 void VulkanWindow::Run() {
@@ -698,7 +694,18 @@ void VulkanWindow::InitVulkan() {
     auto ShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/cubemapvert.spv",
                                                             "shaders/cubemapfrag.spv");
     for (auto &shader: ShaderModules) {
+
+        vk::DebugUtilsObjectNameInfoEXT nameInfo{};
+        nameInfo.pObjectName = "cubemap shader";
+        nameInfo.objectType = vk::ObjectType::eShaderModule;
+        nameInfo.objectHandle = uint64_t(&**shader);
+
+        m_Device->setDebugUtilsObjectNameEXT(nameInfo);
+
+
+
         CubemapSources.emplace_back(std::move(shader));
+
     }
 
     std::unique_ptr<Buffer> imgBuffer = std::make_unique<Buffer>();
@@ -719,8 +726,8 @@ void VulkanWindow::InitVulkan() {
                                                           "hdr img view");
 
 
-    const uint32_t face = std::min(hdrImage.extent.width  / 3u,
-                               hdrImage.extent.height / 2u);
+    const uint32_t face = std::min(hdrImage.extent.width / 3u,
+                                   hdrImage.extent.height / 2u);
 
     vk::ImageCreateInfo imageInfo{};
     imageInfo.imageType = vk::ImageType::e2D;
@@ -740,16 +747,15 @@ void VulkanWindow::InitVulkan() {
     m_CubemapImage.imageAspectFlags = vk::ImageAspectFlagBits::eColor;
 
 
-
-    std::array<vk::ImageView,6> imageviews{};
+    std::array<vk::ImageView, 6> imageviews{};
     for (size_t idx = 0; idx < 6; ++idx) {
-
-        imageviews[idx] = ImageFactory::CreateImageView(*m_Device,m_CubemapImage.image,m_CubemapImage.format,m_CubemapImage.imageAspectFlags,m_AllocationTracker.get(),"img view " + idx,idx);
+        imageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
+                                                        m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                        "img view " + idx, idx);
     }
 
 
-    RenderToCubemap(CubemapSources, hdrImage, imgView, *m_Sampler, m_CubemapImage,imageviews );
-
+    RenderToCubemap(CubemapSources, hdrImage, imgView, *m_Sampler, m_CubemapImage, imageviews);
 
 
     m_DescriptorSets->CreateGlobalDescriptorSet(
@@ -792,30 +798,30 @@ void VulkanWindow::InitVulkan() {
 
 
     CreateCommandBuffers();
-
+    BeginCommandBuffer();
 
     for (const auto &[idx, light]: std::ranges::views::enumerate(m_DirectionalLights)) {
         PrepareFrame();
-        BeginCommandBuffer();
         UpdateShadowUBO(static_cast<uint32_t>(idx));
 
 
         m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x),
                              static_cast<uint32_t>(m_ShadowResolution.y));
 
+
         ImageFactory::ShiftImageLayout(
             *m_CommandBuffers[m_CurrentFrame],
             m_ShadowPass->GetImage()[idx],
-            vk::ImageLayout::eDepthAttachmentOptimal,
+            vk::ImageLayout::eDepthReadOnlyOptimal,
             vk::AccessFlagBits::eDepthStencilAttachmentWrite,
             vk::AccessFlagBits::eShaderRead,
             vk::PipelineStageFlagBits::eLateFragmentTests,
             vk::PipelineStageFlagBits::eFragmentShader
         );
-        EndCommandBuffer();
         SubmitOffscreen();
-        PresentFrame(0);
     }
+    EndCommandBuffer();
+
 
 
     m_VmaAllocatorsDeletionQueue.emplace_back([&](VmaAllocator) {
@@ -859,20 +865,16 @@ void VulkanWindow::DrawFrame() {
 
     m_DepthPass->DoPass(m_CurrentFrame, width, height);
 
-    ImageFactory::ShiftImageLayout(
-        *m_CommandBuffers[m_CurrentFrame],
-        m_DepthPass->GetImage(),
-        vk::ImageLayout::eDepthReadOnlyOptimal,
-        vk::AccessFlagBits::eDepthStencilAttachmentWrite,
-        vk::AccessFlagBits::eShaderRead,
-        vk::PipelineStageFlagBits::eLateFragmentTests,
-        vk::PipelineStageFlagBits::eFragmentShader
-    );
-
-
     m_GBufferPass->DoPass(m_DepthPass->GetImageView(), m_CurrentFrame, width, height);
     m_GBufferPass->PrepareImagesForRead(m_CurrentFrame);
 
+    ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
+    m_DepthPass->GetImage(),
+    vk::ImageLayout::eReadOnlyOptimal,
+    vk::AccessFlagBits::eNone,
+    vk::AccessFlagBits::eColorAttachmentRead,
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
