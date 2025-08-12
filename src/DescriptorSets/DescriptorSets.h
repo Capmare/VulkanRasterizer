@@ -17,7 +17,9 @@ class DescriptorSets {
     public:
     DescriptorSets(const vk::raii::Device& Device) : m_Device(Device) {
     };
-    virtual ~DescriptorSets() = default;
+    virtual ~DescriptorSets() {
+        vkDestroyDescriptorPool(*m_Device,m_DescriptorPool,nullptr);
+    };
 
     DescriptorSets(const DescriptorSets&) = delete;
     DescriptorSets(DescriptorSets&&) noexcept = delete;
@@ -39,20 +41,20 @@ class DescriptorSets {
         const std::vector<vk::ImageView> &SwapchainImageViews, const vk::Sampler &ShadowSampler);
 
     // 0 descriptor pool, 1 descriptor set
-    std::pair<vk::DescriptorPool, vk::DescriptorSet> GetFrameDescriptorSet(uint32_t CurrentFrame) const { return {*m_DescriptorPool,*(*m_FrameDescriptorSets)[CurrentFrame]}; };
-    std::pair<vk::DescriptorPool, vk::DescriptorSet> GetGlobalDescriptorSet(uint32_t CurrentFrame) const { return {*m_DescriptorPool,*(*m_GlobalDescriptorSets)[CurrentFrame]}; };
+    std::pair<vk::DescriptorPool, vk::DescriptorSet> GetFrameDescriptorSet(uint32_t CurrentFrame) const { return {m_DescriptorPool,m_FrameDescriptorSets[CurrentFrame]}; };
+    std::pair<vk::DescriptorPool, vk::DescriptorSet> GetGlobalDescriptorSet(uint32_t CurrentFrame) const { return {m_DescriptorPool,m_GlobalDescriptorSets[CurrentFrame]}; };
 
     // 0 frame 1 global
-    std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t CurrentFrame) const { return { *(*m_FrameDescriptorSets)[CurrentFrame], *(*m_GlobalDescriptorSets)[CurrentFrame] }; };
+    std::vector<vk::DescriptorSet> GetDescriptorSets(uint32_t CurrentFrame) const { return { m_FrameDescriptorSets[CurrentFrame], m_GlobalDescriptorSets[CurrentFrame] }; };
 
-    vk::DescriptorPool GetPool() const {return *m_DescriptorPool; };
+    vk::DescriptorPool GetPool() const {return m_DescriptorPool; };
 private:
 
     const vk::raii::Device& m_Device;
-    std::unique_ptr<vk::raii::DescriptorSets> m_FrameDescriptorSets{};
-    std::unique_ptr<vk::raii::DescriptorSets> m_GlobalDescriptorSets{};
+    std::vector<vk::DescriptorSet> m_FrameDescriptorSets{};
+    std::vector<vk::DescriptorSet> m_GlobalDescriptorSets{};
 
-	std::unique_ptr<vk::raii::DescriptorPool> m_DescriptorPool{};
+	vk::DescriptorPool m_DescriptorPool{};
 
 };
 

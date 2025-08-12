@@ -462,12 +462,12 @@ ImageResource ImageFactory::LoadTextureFromMemory(
 
 
 VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ::ResourceTracker *
-                                          ResourceTracker, const std::string &Name, uint32_t BaseArrLayer, VkImageViewType ViewType) {
+                                          ResourceTracker, const std::string &Name, uint32_t BaseArrLayer, vk::ImageViewType ViewType) {
 
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     createInfo.image = Image;
-    createInfo.viewType = ViewType;
+    createInfo.viewType = static_cast<VkImageViewType>(ViewType);
     createInfo.format = static_cast<VkFormat>(Format);
 
 
@@ -480,7 +480,7 @@ VkImageView ImageFactory::CreateImageView(const vk::raii::Device &device, vk::Im
     createInfo.subresourceRange.baseMipLevel = 0;
     createInfo.subresourceRange.levelCount = 1;
     createInfo.subresourceRange.baseArrayLayer = BaseArrLayer;
-    createInfo.subresourceRange.layerCount = 1;
+    createInfo.subresourceRange.layerCount = (ViewType == vk::ImageViewType::eCube) ? 6u : 1u;
 
     VkImageView imageView;
     VkResult result = vkCreateImageView(*device, &createInfo, NULL, &imageView);
@@ -528,7 +528,7 @@ void ImageFactory::ShiftImageLayout(
     vk::AccessFlags srcAccessMask,
     vk::AccessFlags dstAccessMask,
     vk::PipelineStageFlags srcStage,
-    vk::PipelineStageFlags dstStage)
+    vk::PipelineStageFlags dstStage, uint32_t layerCount)
 {
     // Fallback aspect mask
     vk::ImageAspectFlags aspectFlags = image.imageAspectFlags;
@@ -543,7 +543,7 @@ void ImageFactory::ShiftImageLayout(
     subresourceRange.baseMipLevel = 0;
     subresourceRange.levelCount = 1;
     subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
+    subresourceRange.layerCount = layerCount;
 
     vk::ImageMemoryBarrier barrier{};
     barrier.oldLayout = image.imageLayout;

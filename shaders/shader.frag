@@ -1,7 +1,6 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: require
 
-
 //#define CAMERA_PRESET_SUNNY16
 #define CAMERA_PRESET_INDOOR
 
@@ -224,7 +223,7 @@ void main() {
         vec2 texelSize = 1.0 / vec2(sz);
 
         // 5x5 PCF maybe move to compute shader
-        float shadowDepth = sampleShadowPCF_Tent(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize,2);
+        float shadowDepth = sampleShadowPCF_Tent(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize,50);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }

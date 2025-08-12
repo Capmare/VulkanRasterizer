@@ -436,7 +436,7 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
             vk::AccessFlagBits::eNone,
             vk::AccessFlagBits::eColorAttachmentWrite,
             vk::PipelineStageFlagBits::eNone,
-            vk::PipelineStageFlagBits::eColorAttachmentOutput
+            vk::PipelineStageFlagBits::eColorAttachmentOutput,6
         );
 
         vk::RenderingAttachmentInfo RenderAttchInfo{};
@@ -676,8 +676,8 @@ void VulkanWindow::InitVulkan() {
             ->AddBinding(0, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(1, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment,
                         static_cast<uint32_t>(m_ImageResource.size()))
-            .AddBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
-            .AddBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment, 1)
+            .AddBinding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment)
+            .AddBinding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(4, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eFragment)
 
             .Build()
@@ -738,7 +738,12 @@ void VulkanWindow::InitVulkan() {
 
     ImageFactory::CreateImage(*m_Device, m_VmaAllocator, m_CubemapImage, imageInfo, "Cubemap image");
     m_CubemapImage.imageAspectFlags = vk::ImageAspectFlagBits::eColor;
+    m_CubemapImage.imageLayout = vk::ImageLayout::eUndefined;
+
     m_AllocationTracker->TrackAllocation(m_CubemapImage.allocation, "cubemap image");
+
+
+
 
     std::array<vk::ImageView, 6> imageviews{};
     for (size_t idx = 0; idx < 6; ++idx) {
@@ -759,7 +764,7 @@ void VulkanWindow::InitVulkan() {
 
     m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
                                                        m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                       "CubemapImage", 0, VK_IMAGE_VIEW_TYPE_CUBE);
+                                                       "CubemapImage", 0, vk::ImageViewType::eCube);
 
     m_DescriptorSets->CreateGlobalDescriptorSet(
         **m_GlobalDescriptorSetLayout, *m_Sampler,
@@ -801,9 +806,9 @@ void VulkanWindow::InitVulkan() {
 
     CreateCommandBuffers();
     BeginCommandBuffer();
+    PrepareFrame();
 
     for (const auto &[idx, light]: std::ranges::views::enumerate(m_DirectionalLights)) {
-        PrepareFrame();
         UpdateShadowUBO(static_cast<uint32_t>(idx));
 
 
@@ -820,9 +825,9 @@ void VulkanWindow::InitVulkan() {
             vk::PipelineStageFlagBits::eLateFragmentTests,
             vk::PipelineStageFlagBits::eFragmentShader
         );
-        SubmitOffscreen();
     }
     EndCommandBuffer();
+    SubmitOffscreen();
 
 
     m_AllocationTracker->UntrackAllocation(hdrImage.allocation);
@@ -844,8 +849,6 @@ void VulkanWindow::InitVulkan() {
 
         m_AllocationTracker->UntrackAllocation(m_CubemapImage.allocation);
         vmaDestroyImage(m_VmaAllocator, m_CubemapImage.image, m_CubemapImage.allocation);
-
-
     });
 
     m_AllocationTracker->PrintAllocations();
@@ -889,13 +892,16 @@ void VulkanWindow::DrawFrame() {
                                    vk::PipelineStageFlagBits::eTopOfPipe,
                                    vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
+
+
     ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
-                                   m_CubemapImage,
-                                   vk::ImageLayout::eReadOnlyOptimal,
-                                   vk::AccessFlagBits::eNone,
-                                   vk::AccessFlagBits::eColorAttachmentRead,
-                                   vk::PipelineStageFlagBits::eTopOfPipe,
-                                   vk::PipelineStageFlagBits::eColorAttachmentOutput);
+                       m_CubemapImage,
+                       vk::ImageLayout::eReadOnlyOptimal,
+                       vk::AccessFlagBits::eNone,
+                       vk::AccessFlagBits::eColorAttachmentRead,
+                       vk::PipelineStageFlagBits::eTopOfPipe,
+                       vk::PipelineStageFlagBits::eColorAttachmentOutput, 6);
+
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 

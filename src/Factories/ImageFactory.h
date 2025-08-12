@@ -51,7 +51,7 @@ public:
 
 
     static VkImageView CreateImageView(const vk::raii::Device &device, vk::Image Image, vk::Format Format, vk::ImageAspectFlags Aspect, ::ResourceTracker *
-                                       ResourceTracker, const std::string &Name, uint32_t BaseArrLayer = 0,VkImageViewType ViewType = VK_IMAGE_VIEW_TYPE_2D);
+                                       ResourceTracker, const std::string &Name, uint32_t BaseArrLayer = 0, vk::ImageViewType ViewType = vk::ImageViewType::e2D);
 
     static void CreateImage(const vk::raii::Device &device, VmaAllocator Allocator, ImageResource &Image, vk::ImageCreateInfo imageInfo, const std
                             ::string &name);
@@ -60,7 +60,7 @@ public:
         const vk::CommandBuffer &commandBuffer, ImageResource &image,
         vk::ImageLayout newLayout,
         vk::AccessFlags srcAccessMask, vk::AccessFlags dstAccessMask,
-        vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage
+        vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage, uint32_t layerCount = 1
     );
 };
 

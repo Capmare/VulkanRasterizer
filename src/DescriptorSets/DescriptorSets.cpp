@@ -24,15 +24,17 @@ void DescriptorSets::CreateFrameDescriptorSet(
     const vk::ImageView& CubemapImage
     )
 {
+
     // Allocate two descriptor sets
     vk::DescriptorSetLayout FrameDescriptorSetLayoutArr[] = { FrameLayout, FrameLayout };
 
     vk::DescriptorSetAllocateInfo FrameAllocInfo{};
-    FrameAllocInfo.descriptorPool = *m_DescriptorPool;
+    FrameAllocInfo.descriptorPool = m_DescriptorPool;
     FrameAllocInfo.descriptorSetCount = 2;
     FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
 
-    m_FrameDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(m_Device, FrameAllocInfo);
+    auto dev = *m_Device;
+    m_FrameDescriptorSets = dev.allocateDescriptorSets(FrameAllocInfo);
 
     // Descriptor buffer info
     vk::DescriptorBufferInfo bufferInfo{};
@@ -41,22 +43,22 @@ void DescriptorSets::CreateFrameDescriptorSet(
     bufferInfo.range = sizeof(MVP);
 
     vk::DescriptorImageInfo DiffuseImageInfo{};
-    DiffuseImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    DiffuseImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     DiffuseImageInfo.imageView = std::get<0>(ColorImageViews);
     DiffuseImageInfo.sampler = nullptr;
 
     vk::DescriptorImageInfo NormalImageInfo{};
-    NormalImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    NormalImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     NormalImageInfo.imageView = std::get<1>(ColorImageViews);
     NormalImageInfo.sampler = nullptr;
 
     vk::DescriptorImageInfo MaterialImageInfo{};
-    MaterialImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    MaterialImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     MaterialImageInfo.imageView = std::get<2>(ColorImageViews);
     MaterialImageInfo.sampler = nullptr;
 
     vk::DescriptorImageInfo DepthImageInfo{};
-    DepthImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    DepthImageInfo.imageLayout = vk::ImageLayout::eDepthReadOnlyOptimal;
     DepthImageInfo.imageView = DepthImageView;
     DepthImageInfo.sampler = nullptr;
 
@@ -66,7 +68,7 @@ void DescriptorSets::CreateFrameDescriptorSet(
     shadowBufferInfo.range = sizeof(ShadowMVP);
 
     vk::DescriptorImageInfo CubemapImageInfo{};
-    CubemapImageInfo.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+    CubemapImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     CubemapImageInfo.imageView = CubemapImage;
     CubemapImageInfo.sampler = nullptr;
 
@@ -74,13 +76,13 @@ void DescriptorSets::CreateFrameDescriptorSet(
     shadowImageInfos.reserve(ShadowImageViews.size());
     for (const auto& view : ShadowImageViews) {
         vk::DescriptorImageInfo info{};
-        info.imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+        info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
         info.imageView = view;
         info.sampler = nullptr;
         shadowImageInfos.push_back(info);
     }
 
-    for (auto& ds : *m_FrameDescriptorSets) {
+    for (auto& ds : m_FrameDescriptorSets) {
         std::vector<vk::WriteDescriptorSet> writes;
 
         // Uniform buffer
@@ -169,6 +171,8 @@ void DescriptorSets::CreateFrameDescriptorSet(
 
 
 void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
+
+
     vk::DescriptorPoolSize UboPoolSize{};
     UboPoolSize.type = vk::DescriptorType::eUniformBuffer;
     UboPoolSize.descriptorCount = 4;
@@ -190,7 +194,8 @@ void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
     poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
 
     m_Device.waitIdle();
-    m_DescriptorPool = std::make_unique<vk::raii::DescriptorPool>(m_Device.createDescriptorPool(poolInfo));
+    auto dev = *m_Device;
+    m_DescriptorPool = dev.createDescriptorPool(poolInfo);
 }
 
 void DescriptorSets::CreateGlobalDescriptorSet(
@@ -205,13 +210,12 @@ void DescriptorSets::CreateGlobalDescriptorSet(
     vk::DescriptorSetLayout GlobalDescriptorSetLayoutArr[] = {GlobalLayout, GlobalLayout};
 
     vk::DescriptorSetAllocateInfo GlobalAllocInfo{};
-    GlobalAllocInfo.descriptorPool = *m_DescriptorPool;
+    GlobalAllocInfo.descriptorPool = m_DescriptorPool;
     GlobalAllocInfo.descriptorSetCount = 2;
     GlobalAllocInfo.pSetLayouts = GlobalDescriptorSetLayoutArr;
 
-    auto oldDescriptorSet = std::move(m_GlobalDescriptorSets);
-    m_GlobalDescriptorSets.reset();
-    m_GlobalDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(m_Device, GlobalAllocInfo);
+    auto dev = *m_Device;
+    m_GlobalDescriptorSets = dev.allocateDescriptorSets(GlobalAllocInfo);
 
     vk::DescriptorImageInfo SamplerInfo{};
     SamplerInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
@@ -233,7 +237,7 @@ void DescriptorSets::CreateGlobalDescriptorSet(
     ShadowSamplerInfo.imageView = VK_NULL_HANDLE;
     ShadowSamplerInfo.sampler = ShadowSampler;
 
-    for (auto &ds: *m_GlobalDescriptorSets) {
+    for (auto &ds: m_GlobalDescriptorSets) {
         std::vector<vk::WriteDescriptorSet> descriptorWrites{};
         descriptorWrites.emplace_back();
 
