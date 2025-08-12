@@ -128,16 +128,20 @@ vec3 reconstructWorldPos(float depth, mat4 invProj) {
 }
 
 
-float sampleShadowPCF(texture2D shadowImg, sampler cmp, vec3 uvz, vec2 texelSize)
+float sampleShadowPCF_Tent(texture2D img, sampler cmp,
+                           vec3 uvz, vec2 texelSize, int radius)
 {
-    float s = 0.0;
-    for (int x = -1; x <= 1; ++x)
-    for (int y = -1; y <= 1; ++y) {
+    float sum = 0.0, wsum = 0.0;
+    for (int y = -radius; y <= radius; ++y)
+    for (int x = -radius; x <= radius; ++x) {
+        float wx = float(radius + 1 - abs(x));
+        float wy = float(radius + 1 - abs(y));
+        float w  = wx * wy;          // separable tent weights
         vec2 off = vec2(x, y) * texelSize;
-        s += texture( sampler2DShadow(shadowImg, cmp),
-                      vec3(uvz.xy + off, uvz.z) );
+        sum  += w * texture(sampler2DShadow(img, cmp), vec3(uvz.xy + off, uvz.z));
+        wsum += w;
     }
-    return s / 9.0;
+    return sum / wsum;
 }
 
 void main() {
@@ -218,7 +222,9 @@ void main() {
         //float bias = max(0.0005 * (1.0 - dot(N, L)), 0.00005);
         ivec2 sz = textureSize(sampler2D(Shadow[i], shadowSampler), 0);
         vec2 texelSize = 1.0 / vec2(sz);
-        float shadowDepth = sampleShadowPCF(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize);
+
+        // 5x5 PCF maybe move to compute shader
+        float shadowDepth = sampleShadowPCF_Tent(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize,2);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }

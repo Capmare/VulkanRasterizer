@@ -186,12 +186,12 @@ void ShadowPass::CreateShadowResources(uint32_t Lights,
 ) {
     // Create sampler
     vk::SamplerCreateInfo samplerInfo{};
-    samplerInfo.magFilter = vk::Filter::eLinear;
-    samplerInfo.minFilter = vk::Filter::eLinear;
+    samplerInfo.magFilter = vk::Filter::eNearest;
+    samplerInfo.minFilter = vk::Filter::eNearest;
     samplerInfo.mipmapMode = vk::SamplerMipmapMode::eNearest;
-    samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
-    samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
-    samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+    samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToBorder;
+    samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToBorder;
+    samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToBorder;
     samplerInfo.compareEnable = VK_TRUE;
     samplerInfo.compareOp = vk::CompareOp::eLessOrEqual;
     samplerInfo.borderColor = vk::BorderColor::eFloatOpaqueWhite;
