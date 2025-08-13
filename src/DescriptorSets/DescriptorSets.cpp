@@ -179,11 +179,11 @@ void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
 
     vk::DescriptorPoolSize SamplerPoolSize{};
     SamplerPoolSize.type = vk::DescriptorType::eSampler;
-    SamplerPoolSize.descriptorCount = 2;
+    SamplerPoolSize.descriptorCount = 4;
 
     vk::DescriptorPoolSize TexturesPoolSize{};
     TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-    TexturesPoolSize.descriptorCount = 14 + DirectionalLights;
+    TexturesPoolSize.descriptorCount = 12 + DirectionalLights;
 
     vk::DescriptorPoolSize PoolSizeArr[] = {UboPoolSize, SamplerPoolSize, TexturesPoolSize};
 

@@ -135,9 +135,10 @@ float sampleShadowPCF_Tent(texture2D img, sampler cmp,
     for (int x = -radius; x <= radius; ++x) {
         float wx = float(radius + 1 - abs(x));
         float wy = float(radius + 1 - abs(y));
-        float w  = wx * wy;          // separable tent weights
+        float w  = wx * wy;
         vec2 off = vec2(x, y) * texelSize;
-        sum  += w * texture(sampler2DShadow(img, cmp), vec3(uvz.xy + off, uvz.z));
+        float depth = texture(sampler2D(img, cmp), uvz.xy + off).r;
+        sum  += w * (uvz.z <= depth ? 1.0 : 0.0);
         wsum += w;
     }
     return sum / wsum;
@@ -223,7 +224,7 @@ void main() {
         vec2 texelSize = 1.0 / vec2(sz);
 
         // 5x5 PCF maybe move to compute shader
-        float shadowDepth = sampleShadowPCF_Tent(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize,50);
+        float shadowDepth = sampleShadowPCF_Tent(Shadow[i],shadowSampler, vec3(shadowMapUV.xy, shadowMapUV.z), texelSize,20);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowDepth;
     }
