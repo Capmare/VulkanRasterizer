@@ -127,7 +127,6 @@ void GBufferPass::ShiftLayout(const vk::raii::CommandBuffer &command_buffer) {
 
 
 void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
-                                std::deque<std::function<void(VmaAllocator)> > &VmaAllocatorsDeletionQueue,
                                 ResourceTracker *AllocationTracker, const uint32_t width, const uint32_t height) {
     vk::Extent3D extent = {
         width,
@@ -200,25 +199,8 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
                                                           vk::ImageAspectFlagBits::eColor, AllocationTracker,
                                                           "GBufferMaterialView");
 
-    VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator Alloc) {
-        AllocationTracker->UntrackImageView(m_GBufferDiffuseView);
-        AllocationTracker->UntrackImageView(m_GBufferNormalsView);
-        AllocationTracker->UntrackImageView(m_GBufferMaterialView);
+    m_AllocationTracker = AllocationTracker;
 
-        vkDestroyImageView(*m_Device, m_GBufferDiffuseView, nullptr);
-        vkDestroyImageView(*m_Device, m_GBufferNormalsView, nullptr);
-        vkDestroyImageView(*m_Device, m_GBufferMaterialView, nullptr);
-
-        AllocationTracker->UntrackAllocation(m_GBufferDiffuse.allocation);
-        AllocationTracker->UntrackAllocation(m_GBufferNormals.allocation);
-        AllocationTracker->UntrackAllocation(m_GBufferMaterial.allocation);
-
-        vmaDestroyImage(Alloc, m_GBufferDiffuse.image, m_GBufferDiffuse.allocation);
-        vmaDestroyImage(Alloc, m_GBufferNormals.image, m_GBufferNormals.allocation);
-        vmaDestroyImage(Alloc, m_GBufferMaterial.image, m_GBufferMaterial.allocation);
-
-
-    });
 }
 
 void GBufferPass::DoPass(const vk::ImageView DepthImageView, uint32_t CurrentFrame, uint32_t width, uint32_t height) {
@@ -378,29 +360,42 @@ void GBufferPass::RecreateGBuffer(VmaAllocator Allocator,
                                 std::deque<std::function<void(VmaAllocator)> > &VmaAllocatorsDeletionQueue,
                                 ResourceTracker *AllocationTracker, const uint32_t width, const uint32_t height) {
     // Destroy old GBuffer resources
-    AllocationTracker->UntrackImageView(m_GBufferDiffuseView);
-    AllocationTracker->UntrackImageView(m_GBufferNormalsView);
-    AllocationTracker->UntrackImageView(m_GBufferMaterialView);
+    DestroyImages(Allocator);
+
+
+    m_GBufferDiffuseView = VK_NULL_HANDLE;
+    m_GBufferNormalsView = VK_NULL_HANDLE;
+    m_GBufferMaterialView = VK_NULL_HANDLE;
+    m_GBufferDiffuse = {};
+    m_GBufferNormals = {};
+    m_GBufferMaterial = {};
+
+
+    vk::Extent3D extent = {width, height, 1};
+
+    CreateGBuffer(Allocator,AllocationTracker,width, height);
+}
+
+std::tuple<VkImageView, VkImageView, VkImageView> GBufferPass::GetImageViews() {
+    return {m_GBufferDiffuseView, m_GBufferNormalsView, m_GBufferMaterialView};
+}
+
+void GBufferPass::DestroyImages(VmaAllocator Alloc) {
+    m_AllocationTracker->UntrackImageView(m_GBufferDiffuseView);
+    m_AllocationTracker->UntrackImageView(m_GBufferNormalsView);
+    m_AllocationTracker->UntrackImageView(m_GBufferMaterialView);
 
     vkDestroyImageView(*m_Device, m_GBufferDiffuseView, nullptr);
     vkDestroyImageView(*m_Device, m_GBufferNormalsView, nullptr);
     vkDestroyImageView(*m_Device, m_GBufferMaterialView, nullptr);
 
-    AllocationTracker->UntrackAllocation(m_GBufferDiffuse.allocation);
-    AllocationTracker->UntrackAllocation(m_GBufferNormals.allocation);
-    AllocationTracker->UntrackAllocation(m_GBufferMaterial.allocation);
+    m_AllocationTracker->UntrackAllocation(m_GBufferDiffuse.allocation);
+    m_AllocationTracker->UntrackAllocation(m_GBufferNormals.allocation);
+    m_AllocationTracker->UntrackAllocation(m_GBufferMaterial.allocation);
 
-    vmaDestroyImage(Allocator, m_GBufferDiffuse.image, m_GBufferDiffuse.allocation);
-    vmaDestroyImage(Allocator, m_GBufferNormals.image, m_GBufferNormals.allocation);
-    vmaDestroyImage(Allocator, m_GBufferMaterial.image, m_GBufferMaterial.allocation);
-
-    vk::Extent3D extent = {width, height, 1};
-
-    CreateGBuffer(Allocator,VmaAllocatorsDeletionQueue,AllocationTracker, width, height);
-}
-
-std::tuple<VkImageView, VkImageView, VkImageView> GBufferPass::GetImageViews() {
-    return {m_GBufferDiffuseView, m_GBufferNormalsView, m_GBufferMaterialView};
+    vmaDestroyImage(Alloc, m_GBufferDiffuse.image, m_GBufferDiffuse.allocation);
+    vmaDestroyImage(Alloc, m_GBufferNormals.image, m_GBufferNormals.allocation);
+    vmaDestroyImage(Alloc, m_GBufferMaterial.image, m_GBufferMaterial.allocation);
 }
 
 void GBufferPass::CreateModules() {

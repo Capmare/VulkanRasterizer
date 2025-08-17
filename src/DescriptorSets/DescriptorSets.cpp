@@ -7,6 +7,8 @@
 
 #include <complex.h>
 #include <complex.h>
+#include <complex.h>
+#include <complex.h>
 #include <ranges>
 
 #include "Factories/MeshFactory.h"
@@ -21,7 +23,8 @@ void DescriptorSets::CreateFrameDescriptorSet(
     const BufferInfo &UniformBufferInfo,
     const BufferInfo &ShadowBufferInfo,
     const std::vector<vk::ImageView> &ShadowImageViews,
-    const vk::ImageView& CubemapImage
+    const vk::ImageView& CubemapImage,
+    const vk::ImageView& IrradianceImage
     )
 {
 
@@ -71,6 +74,11 @@ void DescriptorSets::CreateFrameDescriptorSet(
     CubemapImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     CubemapImageInfo.imageView = CubemapImage;
     CubemapImageInfo.sampler = nullptr;
+
+    vk::DescriptorImageInfo IrradianceImageInfo{};
+    IrradianceImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    IrradianceImageInfo.imageView = IrradianceImage;
+    IrradianceImageInfo.sampler = nullptr;
 
     std::vector<vk::DescriptorImageInfo> shadowImageInfos;
     shadowImageInfos.reserve(ShadowImageViews.size());
@@ -164,6 +172,15 @@ void DescriptorSets::CreateFrameDescriptorSet(
         writeCubemap.pImageInfo = &CubemapImageInfo;
         writes.push_back(writeCubemap);
 
+        vk::WriteDescriptorSet writeIrradiance{};
+        writeIrradiance.dstSet = ds;
+        writeIrradiance.dstBinding = 8;
+        writeIrradiance.dstArrayElement = 0;
+        writeIrradiance.descriptorCount = 1;
+        writeIrradiance.descriptorType = vk::DescriptorType::eSampledImage;
+        writeIrradiance.pImageInfo = &CubemapImageInfo;
+        writes.push_back(writeIrradiance);
+
         m_Device.updateDescriptorSets(writes, {});
     }
 }
@@ -183,7 +200,7 @@ void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
 
     vk::DescriptorPoolSize TexturesPoolSize{};
     TexturesPoolSize.type = vk::DescriptorType::eSampledImage;
-    TexturesPoolSize.descriptorCount = 12 + DirectionalLights;
+    TexturesPoolSize.descriptorCount = 14 + DirectionalLights;
 
     vk::DescriptorPoolSize PoolSizeArr[] = {UboPoolSize, SamplerPoolSize, TexturesPoolSize};
 

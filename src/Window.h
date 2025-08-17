@@ -203,6 +203,8 @@ private:
     ImageResource m_CubemapImage;
 	vk::ImageView m_CubemapImageView{};
 
+    ImageResource m_IrradianceImage;
+	vk::ImageView m_IrradianceImageView{};
 
 
 	float cameraSpeed = 10.0f;

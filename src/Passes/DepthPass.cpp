@@ -191,8 +191,9 @@ void DepthPass::CreatePipeline(uint32_t ImageResourceSize, const std::pair<vk::F
 
 }
 
-void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void(VmaAllocator)>>& VmaAllocatorsDeletionQueue, ResourceTracker* AllocationTracker,const vk::Format& DepthFormat, uint32_t width, uint32_t height) {
+void DepthPass::CreateImage(VmaAllocator Allocator, ResourceTracker* AllocationTracker,const vk::Format& DepthFormat, uint32_t width, uint32_t height) {
 
+	m_AllocationTracker = AllocationTracker;
 	vk::ImageCreateInfo imageInfo{};
 	imageInfo.imageType = vk::ImageType::e2D;
 	imageInfo.extent = vk::Extent3D{ width, height, 1 };
@@ -216,27 +217,28 @@ void DepthPass::CreateImage(VmaAllocator Allocator,std::deque<std::function<void
 	m_DepthImage.imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
 	m_DepthImage.imageLayout = vk::ImageLayout::eUndefined;
 
+	m_Allocator = Allocator;
+
 	AllocationTracker->TrackAllocation(m_DepthImage.allocation, "DepthImage");
 
-	VmaAllocatorsDeletionQueue.emplace_back([=](VmaAllocator Alloc) {
-		AllocationTracker->UntrackImageView(m_DepthImageView);
-		vkDestroyImageView(*m_Device, m_DepthImageView, nullptr);
 
-		AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-		vmaDestroyImage(Alloc, m_DepthImage.image, m_DepthImage.allocation);
-	});
+
 }
 
 void DepthPass::RecreateImage(VmaAllocator Allocator,std::deque<std::function<void(VmaAllocator)>>& VmaAllocatorsDeletionQueue, ResourceTracker* AllocationTracker,const vk::Format& DepthFormat, uint32_t width, uint32_t height) {
 	// Destroy old depth image resources
-	AllocationTracker->UntrackImageView(m_DepthImageView);
+	DestroyImages(Allocator);
+
+	CreateImage(Allocator,AllocationTracker,DepthFormat, width, height);
+
+}
+
+void DepthPass::DestroyImages(VmaAllocator Allocator) {
+	m_AllocationTracker->UntrackImageView(m_DepthImageView);
 	vkDestroyImageView(*m_Device, m_DepthImageView, nullptr);
 
-	AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-	vmaDestroyImage(Allocator, m_DepthImage.image, m_DepthImage.allocation);
-
-	CreateImage(Allocator,VmaAllocatorsDeletionQueue,AllocationTracker, DepthFormat, width, height);
-
+	m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
+	vmaDestroyImage(m_Allocator, m_DepthImage.image, m_DepthImage.allocation);
 }
 
 void DepthPass::CreateModules() {

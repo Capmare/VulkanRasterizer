@@ -11,23 +11,21 @@
 #include "Structs/Lights.h"
 
 ColorPass::ColorPass(const vk::raii::Device &Device, const vk::PipelineLayout &PipelineLayout,
-    const std::vector<std::unique_ptr<vk::raii::CommandBuffer>> &CommandBuffer,
-    const std::pair<std::vector<DirectionalLight>, std::vector<PointLight>>& LightData,
-    const std::pair<vk::Format, vk::Format>& ColorDepthFormat
-    )   : m_Device(Device)
-        , m_PipelineLayout(PipelineLayout)
-        , m_CommandBuffer(CommandBuffer)
-        , m_LightData(LightData)
-        , m_Format(ColorDepthFormat)
-
-{
-
+                     const std::vector<std::unique_ptr<vk::raii::CommandBuffer> > &CommandBuffer,
+                     const std::pair<std::vector<DirectionalLight>, std::vector<PointLight> > &LightData,
+                     const std::pair<vk::Format, vk::Format> &ColorDepthFormat
+) : m_Device(Device)
+    , m_PipelineLayout(PipelineLayout)
+    , m_CommandBuffer(CommandBuffer)
+    , m_LightData(LightData)
+    , m_Format(ColorDepthFormat) {
     m_GraphicsPipelineFactory = std::make_unique<PipelineFactory>(Device);
     CreateModules();
     CreateGraphicsPipeline();
 }
 
-void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int CurrentFrame, uint32_t imageIndex, int width, int height) const {
+void ColorPass::DoPass(const std::vector<vk::raii::ImageView> &ImageView, int CurrentFrame, uint32_t imageIndex,
+                       int width, int height) const {
     vk::Viewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     vk::Rect2D scissor{{0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}};
 
@@ -46,7 +44,8 @@ void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int Cu
     m_CommandBuffer[CurrentFrame]->beginRendering(renderInfo);
     m_CommandBuffer[CurrentFrame]->bindPipeline(vk::PipelineBindPoint::eGraphics, *m_GraphicsPipeline);
 
-    m_CommandBuffer[CurrentFrame]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_PipelineLayout, 0, m_DescriptorSets, {});
+    m_CommandBuffer[CurrentFrame]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_PipelineLayout, 0,
+                                                      m_DescriptorSets, {});
     m_CommandBuffer[CurrentFrame]->setViewport(0, viewport);
     m_CommandBuffer[CurrentFrame]->setScissor(0, scissor);
     m_CommandBuffer[CurrentFrame]->draw(3, 1, 0, 0);
@@ -55,7 +54,7 @@ void ColorPass::DoPass(const std::vector<vk::raii::ImageView>& ImageView ,int Cu
 
 
 void ColorPass::CreateGraphicsPipeline() {
-      // Depth stencil
+    // Depth stencil
     vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.depthTestEnable = VK_FALSE;
     depthStencil.depthWriteEnable = VK_FALSE;
@@ -66,8 +65,8 @@ void ColorPass::CreateGraphicsPipeline() {
     // Color blend attachment
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask =
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+            vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
     colorBlendAttachment.blendEnable = VK_FALSE;
 
     // Multisampling
@@ -94,23 +93,29 @@ void ColorPass::CreateGraphicsPipeline() {
     vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.vertexBindingDescriptionCount = 0;
 
-    using LightSpecPair = std::pair<uint32_t, uint32_t>;
-    LightSpecPair specData{
+    struct LightSpecData {
+        uint32_t numPoint;
+        uint32_t numDir;
+    };
+    static_assert(sizeof(LightSpecData) == 8, "Unexpected padding");
+    static_assert(offsetof(LightSpecData, numPoint) == 0, "Offset mismatch");
+    static_assert(offsetof(LightSpecData, numDir) == 4, "Offset mismatch");
+
+    LightSpecData specData{
         static_cast<uint32_t>(m_LightData.second.size()),
         static_cast<uint32_t>(m_LightData.first.size())
     };
 
-    // Map entries
-    std::array<vk::SpecializationMapEntry, 2> specMapEntries = {
-        vk::SpecializationMapEntry{2, offsetof(LightSpecPair, first), sizeof(uint32_t)},  // Point lights
-        vk::SpecializationMapEntry{3, offsetof(LightSpecPair, second), sizeof(uint32_t)} // Directional lights
+    std::array<vk::SpecializationMapEntry, 2> entries = {
+        vk::SpecializationMapEntry{2, offsetof(LightSpecData, numPoint), sizeof(uint32_t)},
+        vk::SpecializationMapEntry{3, offsetof(LightSpecData, numDir), sizeof(uint32_t)},
     };
 
     // Specialization info
     vk::SpecializationInfo specializationInfo{};
-    specializationInfo.mapEntryCount = static_cast<uint32_t>(specMapEntries.size());
-    specializationInfo.pMapEntries = specMapEntries.data();
-    specializationInfo.dataSize = sizeof(LightSpecPair);
+    specializationInfo.mapEntryCount = static_cast<uint32_t>(entries.size());
+    specializationInfo.pMapEntries = entries.data();
+    specializationInfo.dataSize = sizeof(LightSpecData);
     specializationInfo.pData = &specData;
 
     // Shader stages
@@ -125,7 +130,7 @@ void ColorPass::CreateGraphicsPipeline() {
     fragmentStageInfo.setPName("main");
     fragmentStageInfo.pSpecializationInfo = &specializationInfo;
 
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertexStageInfo, fragmentStageInfo };
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {vertexStageInfo, fragmentStageInfo};
 
     // Viewport state
     vk::PipelineViewportStateCreateInfo viewportState{};
@@ -145,20 +150,20 @@ void ColorPass::CreateGraphicsPipeline() {
         .SetInputAssembly(inputAssembly)
         .SetRasterizer(rasterizer)
         .SetMultisampling(multisampling)
-        .SetColorBlendAttachments({ colorBlendAttachment })
+        .SetColorBlendAttachments({colorBlendAttachment})
         .SetViewportState(viewportState)
-        .SetDynamicStates({ vk::DynamicState::eScissor, vk::DynamicState::eViewport })
+        .SetDynamicStates({vk::DynamicState::eScissor, vk::DynamicState::eViewport})
         .SetDepthStencil(depthStencil)
         .SetLayout(m_PipelineLayout)
-        .SetColorFormats({ colorFormat })
+        .SetColorFormats({colorFormat})
         .SetDepthFormat(depthFormat)
         .Build());
 }
 
 void ColorPass::CreateModules() {
-    auto ShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadervert.spv", "shaders/shaderfrag.spv");
-    for (auto& shader : ShaderModules) {
-
+    auto ShaderModules = ShaderFactory::Build_ShaderModules(m_Device, "shaders/shadervert.spv",
+                                                            "shaders/shaderfrag.spv");
+    for (auto &shader: ShaderModules) {
         vk::DebugUtilsObjectNameInfoEXT nameInfo{};
         nameInfo.pObjectName = "color";
         nameInfo.objectType = vk::ObjectType::eShaderModule;

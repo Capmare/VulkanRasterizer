@@ -17,7 +17,9 @@ public:
     DepthPass(const vk::raii::Device& Device, std::vector<std::unique_ptr<vk::raii::CommandBuffer>>& CommandBuffer);
 
     void WindowResizeShiftLayout(const vk::raii::CommandBuffer &command_buffer);;
-    virtual ~DepthPass() = default;
+    virtual ~DepthPass() {
+
+    };
 
     void ShiftLayout(const vk::raii::CommandBuffer & command_buffer);
 
@@ -32,13 +34,14 @@ public:
 
     void CreatePipeline(uint32_t ImageResourceSize, const std::pair<vk::Format, vk::Format> &ColorAndDepthFormat);
 
-	void CreateImage(VmaAllocator Allocator, std::deque<std::function<void(VmaAllocator)>> &VmaAllocatorsDeletionQueue, ResourceTracker *
-	                 AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t height);
+	void CreateImage(VmaAllocator Allocator, ResourceTracker *AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
+	                 height);
 
 	void RecreateImage(VmaAllocator Allocator, std::deque<std::function<void(VmaAllocator)>> &VmaAllocatorsDeletionQueue, ResourceTracker *
 	                   AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
 	                   height);
 
+	void DestroyImages(VmaAllocator Allocator);
 	std::vector<vk::DescriptorSet> m_DescriptorSets;
 	vk::PipelineLayout m_PipelineLayout;
 
@@ -64,6 +67,9 @@ private:
 	vk::ImageView m_DepthImageView;
 
 	std::pair<vk::Format, vk::Format> m_Format;
+
+	VmaAllocator m_Allocator;
+	ResourceTracker* m_AllocationTracker;
 };
 
 

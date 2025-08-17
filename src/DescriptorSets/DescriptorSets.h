@@ -31,7 +31,7 @@ class DescriptorSets {
     void CreateFrameDescriptorSet(const ::vk::DescriptorSetLayout &FrameLayout,
                                   const std::tuple<vk::ImageView, vk::ImageView, vk::ImageView> & ColorImageViews, const vk::ImageView &DepthImageView,
                                   const BufferInfo &UniformBufferInfo, const BufferInfo &ShadowBufferInfo, const std::vector<vk::ImageView> &
-                                  ShadowImageViews, const vk::ImageView &CubemapImage);
+                                  ShadowImageViews, const vk::ImageView &CubemapImage, const vk::ImageView &IrradianceImage);
 
     void CreateGlobalDescriptorSet(
         const vk::DescriptorSetLayout &GlobalLayout,
