@@ -1,6 +1,7 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier : require
 
+
 layout(location = 0) in vec3 inWorldPos;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec2 inTexCoord;
@@ -11,7 +12,6 @@ layout(location = 5) in vec3 inBitangent;
 layout(location = 0) out vec4 outAlbedo;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outMaterial;
-
 
 layout(set = 1, binding = 0) uniform sampler texSampler;
 layout(constant_id = 0) const uint TEXTURE_COUNT = 1u;
@@ -32,57 +32,43 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     vec3 cameraPos;
 } ubo;
 
-
 layout(set = 1, binding = 1) uniform texture2D textures[TEXTURE_COUNT];
 
-
-struct PointLight
-{
-    vec4 Position; // w is unused
-    vec4 Color; // w is intensity
-};
-
-//layout(constant_id = 2) const uint MAX_LIGHTS = 1;
+struct PointLight { vec4 Position; vec4 Color; };
 layout(set = 1, binding = 2) uniform LightBuffer {
     PointLight pointLights[1];
 } lightBuffer;
 
-
-
 void main() {
-
-
     const float alphaThreshold = 0.99;
     vec4 albedoSample = texture(sampler2D(textures[nonuniformEXT(material.Diffuse)], texSampler), inTexCoord);
-    if (albedoSample.a < alphaThreshold)
-    discard;
+    if (albedoSample.a < alphaThreshold) discard;
 
-    vec3 albedo = albedoSample.rgb;
+    vec3 albedo    = albedoSample.rgb;
+    float metallic = texture(sampler2D(textures[nonuniformEXT(material.Metallic)],  texSampler), inTexCoord).b;
+    float roughness= texture(sampler2D(textures[nonuniformEXT(material.Roughness)], texSampler), inTexCoord).g;
+    float ao       = texture(sampler2D(textures[nonuniformEXT(material.AO)],        texSampler), inTexCoord).r;
 
-    float metallic = texture(sampler2D(textures[nonuniformEXT(material.Metallic)], texSampler), inTexCoord).b;
-    float roughness = texture(sampler2D(textures[nonuniformEXT(material.Roughness)], texSampler), inTexCoord).g;
-    float ao = texture(sampler2D(textures[nonuniformEXT(material.AO)], texSampler), inTexCoord).r;
+    vec3 n_ts = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), inTexCoord).rgb * 2.0 - 1.0;
+    #ifdef NORMALMAP_DIRECTX
+    n_ts.y = -n_ts.y;
+    #endif
 
-    // Sample tangent-space normal map
-    vec3 normal = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), inTexCoord).rgb;
-    normal = normal * 2.0 - 1.0;
+    mat3 M   = mat3(ubo.model);
 
-    // Build TBN matrix
-    vec3 T = normalize(vec3(ubo.model * vec4(inTangent, 0.0)));
-    vec3 N = normalize(vec3(ubo.model * vec4(inNormal, 0.0)));
-    vec3 B = cross(N, T);
-    T = normalize(T - dot(T, N) * N);
+    vec3 Nw = normalize(Nrm * inNormal);
+    vec3 Tw = normalize(M * inTangent);
+    Tw = normalize(Tw - Nw * dot(Tw, Nw));
+    vec3 Braw = normalize(M * inBitangent);
+    float handed = sign(dot(cross(Nw, Tw), Braw));
+    vec3 Bw = normalize(cross(Nw, Tw)) * handed;
 
-    mat3 TBN = mat3(T, B, N);
+    mat3 TBN = mat3(Tw, Bw, Nw);
 
-    // Transform sampled normal from tangent space to world space
-    vec3 worldNormal = normalize(TBN * normal);
-
-
+    vec3 worldNormal = normalize(TBN * n_ts);
+    vec3 packedNormal = worldNormal * 0.5 + 0.5;
 
     outAlbedo   = vec4(albedo, 1.0);
-    outNormal = vec4(worldNormal, 1.0);
+    outNormal   = vec4(packedNormal, 1.0);
     outMaterial = vec4(metallic, roughness, ao, 1.0);
-
-
 }
