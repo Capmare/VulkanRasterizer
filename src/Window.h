@@ -1,8 +1,6 @@
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -12,7 +10,7 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#include <vma/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 
 #include <memory>
 

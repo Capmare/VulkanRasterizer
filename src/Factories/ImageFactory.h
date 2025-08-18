@@ -7,7 +7,7 @@
 
 #include "Buffer.h"
 #include "ResourceTracker.h"
-#include <vma/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 #include "vulkan/vulkan_raii.hpp"
 
 struct ImageResource {

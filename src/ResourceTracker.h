@@ -7,7 +7,7 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "vma/vk_mem_alloc.h"
+#include "vk_mem_alloc.h"
 
 
 class ResourceTracker {

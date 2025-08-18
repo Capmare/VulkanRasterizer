@@ -12,7 +12,7 @@
 
 #include "ImageFactory.h"
 #include "assimp/scene.h"
-#include "vma/vk_mem_alloc.h"
+#include "vk_mem_alloc.h"
 #include "glm/glm.hpp"
 #include "vulkan/vulkan_raii.hpp"
 #include "Structs/Mesh.h"

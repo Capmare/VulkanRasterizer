@@ -290,7 +290,7 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
     vk::DescriptorImageInfo imageViewInfo{};
     imageViewInfo.imageView = inImageView;
-    imageViewInfo.imageLayout = inImage.imageLayout;
+    imageViewInfo.imageLayout = inImage.imageLayout; // here it's read only optimal
 
 
     vk::WriteDescriptorSet samplerDescriptorSet{};
@@ -473,7 +473,7 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
         cmd.beginRendering(RenderingInfo);
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, GraphicsPipeline);
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {});
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {}); // here it expects the image to be in readonly optimal
 
         cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0,
                           vk::ArrayProxy<const glm::mat4>{captureViews[idx]});
@@ -485,6 +485,16 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
         cmd.draw(36, 1, 0, 0);
         cmd.endRendering();
     }
+
+    ImageFactory::ShiftImageLayout(
+    cmd,
+    outImage,
+    vk::ImageLayout::eShaderReadOnlyOptimal,
+    vk::AccessFlagBits::eColorAttachmentWrite,
+    vk::AccessFlagBits::eNone,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eNone, 6
+);
 
     cmd.end();
 
@@ -823,7 +833,7 @@ void VulkanWindow::InitVulkan() {
 
     m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
                                                        m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                       "CubemapImage", 0, vk::ImageViewType::eCube);
+                                                       "Cube map image view", 0, vk::ImageViewType::eCube);
 
 
     RenderToCubemap(IrradianceCubemapSources, m_CubemapImage, m_CubemapImageView, *m_Sampler, m_IrradianceImage,
