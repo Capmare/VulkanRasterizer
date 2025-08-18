@@ -124,7 +124,8 @@ private:
 	void ProcessInput(GLFWwindow *window, float deltaTime);
 
 	void RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, ImageResource &inImage, const vk::ImageView &inImageView, vk::Sampler
-	                     sampler, ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews, const vk::Extent2D &renderArea);
+	                     sampler, ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews, const vk::Extent2D &renderArea, int
+	                     inLayerCount);
 
 	GLFWwindow* m_Window{};
 

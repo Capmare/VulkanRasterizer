@@ -255,7 +255,8 @@ void VulkanWindow::ProcessInput(GLFWwindow *window, float deltaTime) {
 
 void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, ImageResource &inImage,
                                    const vk::ImageView &inImageView, vk::Sampler sampler,
-                                   ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews, const vk::Extent2D& renderArea) {
+                                   ImageResource &outImage, std::array<vk::ImageView, 6> &outImageViews,
+                                   const vk::Extent2D &renderArea, int inLayerCount = 1) {
     m_DescriptorSetFactory->ResetFactory();
 
     vk::raii::DescriptorSetLayout dsLayout = m_DescriptorSetFactory->AddBinding(
@@ -420,26 +421,29 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
     cmd.begin(beginInfo);
 
 
-    for (uint32_t idx = 0; idx < 6; idx++) {
-        ImageFactory::ShiftImageLayout(
-            cmd,
-            inImage,
-            vk::ImageLayout::eReadOnlyOptimal,
-            vk::AccessFlagBits::eNone,
-            vk::AccessFlagBits::eColorAttachmentRead,
-            vk::PipelineStageFlagBits::eNone,
-            vk::PipelineStageFlagBits::eColorAttachmentOutput
-        );
+    ImageFactory::ShiftImageLayout(
+    cmd,
+    inImage,
+    vk::ImageLayout::eReadOnlyOptimal,
+    vk::AccessFlagBits::eNone,
+    vk::AccessFlagBits::eColorAttachmentRead,
+    vk::PipelineStageFlagBits::eNone,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput, inLayerCount
+);
 
-        ImageFactory::ShiftImageLayout(
-            cmd,
-            outImage,
-            vk::ImageLayout::eColorAttachmentOptimal,
-            vk::AccessFlagBits::eNone,
-            vk::AccessFlagBits::eColorAttachmentWrite,
-            vk::PipelineStageFlagBits::eNone,
-            vk::PipelineStageFlagBits::eColorAttachmentOutput, 6
-        );
+    ImageFactory::ShiftImageLayout(
+    cmd,
+    outImage,
+    vk::ImageLayout::eColorAttachmentOptimal,
+    vk::AccessFlagBits::eNone,
+    vk::AccessFlagBits::eColorAttachmentWrite,
+    vk::PipelineStageFlagBits::eNone,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput, 6
+);
+
+    for (uint32_t idx = 0; idx < 6; idx++) {
+
+
 
         vk::RenderingAttachmentInfo RenderAttchInfo{};
         RenderAttchInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
@@ -453,7 +457,7 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
         RenderingInfo.layerCount = 1;
         RenderingInfo.pColorAttachments = &RenderAttchInfo;
         RenderingInfo.pStencilAttachment = nullptr;
-        RenderingInfo.renderArea = vk::Rect2D{ VkOffset2D{}, renderArea };
+        RenderingInfo.renderArea = vk::Rect2D{VkOffset2D{}, renderArea};
 
 
         vk::DescriptorSet hppDs = ds;
@@ -497,7 +501,6 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
     m_GraphicsQueue->submit({submitInfo}, fence);
     m_Device->waitForFences({fence}, true,UINT64_MAX);
 }
-
 
 
 void VulkanWindow::Run() {
@@ -762,14 +765,16 @@ void VulkanWindow::InitVulkan() {
     }
 
 
-    RenderToCubemap(CubemapSources, hdrImage, hdrImageView, *m_Sampler, m_CubemapImage, imageviews, {imageInfo.extent.width, imageInfo.extent.height});
-    m_CubemapImage.extent = vk::Extent2D{imageInfo.extent.width,imageInfo.extent.height};
+    RenderToCubemap(CubemapSources, hdrImage, hdrImageView, *m_Sampler, m_CubemapImage, imageviews,
+                    {imageInfo.extent.width, imageInfo.extent.height});
+    m_CubemapImage.extent = vk::Extent2D{imageInfo.extent.width, imageInfo.extent.height};
+
 
     // irradiance
 
     std::vector<vk::ShaderModule> IrradianceCubemapSources;
     auto IrrShaderModules = ShaderFactory::Build_ShaderModules(*m_Device, "shaders/cubemapvert.spv",
-                                                            "shaders/irrCubemapfrag.spv");
+                                                               "shaders/irrCubemapfrag.spv");
     for (auto &shader: IrrShaderModules) {
         vk::DebugUtilsObjectNameInfoEXT nameInfo{};
         nameInfo.pObjectName = "cubemap shader";
@@ -783,21 +788,21 @@ void VulkanWindow::InitVulkan() {
     }
 
     uint32_t faceSize = m_CubemapImage.extent.width;
-    uint32_t irrSize  = std::max(1u, faceSize / 16u);
+    uint32_t irrSize = std::max(1u, faceSize / 16u);
 
     vk::ImageCreateInfo irrimageInfo{};
-    irrimageInfo.imageType   = vk::ImageType::e2D;
-    irrimageInfo.extent      = vk::Extent3D{ irrSize, irrSize, 1 };
-    irrimageInfo.mipLevels   = 1;
+    irrimageInfo.imageType = vk::ImageType::e2D;
+    irrimageInfo.extent = vk::Extent3D{irrSize, irrSize, 1};
+    irrimageInfo.mipLevels = 1;
     irrimageInfo.arrayLayers = 6;
-    irrimageInfo.format      = vk::Format::eR32G32B32A32Sfloat;
-    irrimageInfo.tiling      = vk::ImageTiling::eOptimal;
+    irrimageInfo.format = vk::Format::eR32G32B32A32Sfloat;
+    irrimageInfo.tiling = vk::ImageTiling::eOptimal;
     irrimageInfo.initialLayout = vk::ImageLayout::eUndefined;
-    irrimageInfo.usage       = vk::ImageUsageFlagBits::eColorAttachment |
-                               vk::ImageUsageFlagBits::eSampled;
-    irrimageInfo.samples     = vk::SampleCountFlagBits::e1;
+    irrimageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment |
+                         vk::ImageUsageFlagBits::eSampled;
+    irrimageInfo.samples = vk::SampleCountFlagBits::e1;
     irrimageInfo.sharingMode = vk::SharingMode::eExclusive;
-    irrimageInfo.flags       = vk::ImageCreateFlagBits::eCubeCompatible;
+    irrimageInfo.flags = vk::ImageCreateFlagBits::eCubeCompatible;
 
 
     ImageFactory::CreateImage(*m_Device, m_VmaAllocator, m_IrradianceImage, irrimageInfo, "IrradianceImage image");
@@ -808,23 +813,25 @@ void VulkanWindow::InitVulkan() {
     std::array<vk::ImageView, 6> irrimageviews{};
     for (size_t idx = 0; idx < 6; ++idx) {
         irrimageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_IrradianceImage.image, m_IrradianceImage.format,
-                                                        m_IrradianceImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                        "img view " + std::to_string(idx), idx);
+                                                           m_IrradianceImage.imageAspectFlags,
+                                                           m_AllocationTracker.get(),
+                                                           "img view " + std::to_string(idx), idx);
     }
 
     m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
-                                                   m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                   "CubemapImage", 0, vk::ImageViewType::eCube);
+                                                       m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                       "CubemapImage", 0, vk::ImageViewType::eCube);
 
 
-    RenderToCubemap(IrradianceCubemapSources, m_CubemapImage, m_CubemapImageView, *m_Sampler, m_IrradianceImage, irrimageviews, {irrimageInfo.extent.width, irrimageInfo.extent.height});
+    RenderToCubemap(IrradianceCubemapSources, m_CubemapImage, m_CubemapImageView, *m_Sampler, m_IrradianceImage,
+                    irrimageviews, {irrimageInfo.extent.width, irrimageInfo.extent.height}, 6);
 
-    m_IrradianceImage.extent = vk::Extent2D{ irrimageInfo.extent.width, irrimageInfo.extent.height };
+    m_IrradianceImage.extent = vk::Extent2D{irrimageInfo.extent.width, irrimageInfo.extent.height};
 
 
     m_IrradianceImageView = ImageFactory::CreateImageView(*m_Device, m_IrradianceImage.image, m_IrradianceImage.format,
-                                                       m_IrradianceImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                       "IrradianceImage", 0, vk::ImageViewType::eCube);
+                                                          m_IrradianceImage.imageAspectFlags, m_AllocationTracker.get(),
+                                                          "IrradianceImage", 0, vk::ImageViewType::eCube);
 
 
     m_AllocationTracker->UntrackImageView(hdrImageView);
@@ -840,8 +847,6 @@ void VulkanWindow::InitVulkan() {
         m_AllocationTracker->UntrackImageView(irrimageviews[idx]);
         vkDestroyImageView(**m_Device, irrimageviews[idx], nullptr);
     }
-
-
 
 
     m_DescriptorSets->CreateGlobalDescriptorSet(
@@ -985,12 +990,12 @@ void VulkanWindow::DrawFrame() {
                                    vk::PipelineStageFlagBits::eColorAttachmentOutput, 6);
 
     ImageFactory::ShiftImageLayout(*m_CommandBuffers[m_CurrentFrame],
-                               m_IrradianceImage,
-                               vk::ImageLayout::eReadOnlyOptimal,
-                               vk::AccessFlagBits::eNone,
-                               vk::AccessFlagBits::eColorAttachmentRead,
-                               vk::PipelineStageFlagBits::eTopOfPipe,
-                               vk::PipelineStageFlagBits::eColorAttachmentOutput, 6);
+                                   m_IrradianceImage,
+                                   vk::ImageLayout::eReadOnlyOptimal,
+                                   vk::AccessFlagBits::eNone,
+                                   vk::AccessFlagBits::eColorAttachmentRead,
+                                   vk::PipelineStageFlagBits::eTopOfPipe,
+                                   vk::PipelineStageFlagBits::eColorAttachmentOutput, 6);
 
     m_ColorPass->DoPass(m_SwapChainFactory->m_ImageViews, m_CurrentFrame, imageIndex, width, height);
 
