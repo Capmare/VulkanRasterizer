@@ -225,7 +225,8 @@ void DepthPass::CreateImage(VmaAllocator Allocator, ResourceTracker* AllocationT
 
 }
 
-void DepthPass::RecreateImage(VmaAllocator Allocator,std::deque<std::function<void(VmaAllocator)>>& VmaAllocatorsDeletionQueue, ResourceTracker* AllocationTracker,const vk::Format& DepthFormat, uint32_t width, uint32_t height) {
+void DepthPass::RecreateImage(VmaAllocator Allocator, ResourceTracker *AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
+                              height) {
 	// Destroy old depth image resources
 	DestroyImages(Allocator);
 
@@ -238,7 +239,7 @@ void DepthPass::DestroyImages(VmaAllocator Allocator) {
 	vkDestroyImageView(*m_Device, m_DepthImageView, nullptr);
 
 	m_AllocationTracker->UntrackAllocation(m_DepthImage.allocation);
-	vmaDestroyImage(m_Allocator, m_DepthImage.image, m_DepthImage.allocation);
+	vmaDestroyImage(Allocator, m_DepthImage.image, m_DepthImage.allocation);
 }
 
 void DepthPass::CreateModules() {

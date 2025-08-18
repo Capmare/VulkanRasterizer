@@ -357,8 +357,7 @@ void GBufferPass::CreatePipeline(uint32_t ImageResourceSize, const vk::Format &D
 }
 
 void GBufferPass::RecreateGBuffer(VmaAllocator Allocator,
-                                std::deque<std::function<void(VmaAllocator)> > &VmaAllocatorsDeletionQueue,
-                                ResourceTracker *AllocationTracker, const uint32_t width, const uint32_t height) {
+                                  ResourceTracker *AllocationTracker, const uint32_t width, const uint32_t height) {
     // Destroy old GBuffer resources
     DestroyImages(Allocator);
 

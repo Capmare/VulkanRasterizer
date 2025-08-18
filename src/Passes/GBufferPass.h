@@ -47,8 +47,7 @@ public:
     void CreatePipeline(uint32_t ImageResourceSize, const vk::Format &DepthFormat);
 
     void RecreateGBuffer(VmaAllocator Allocator,
-                         std::deque<std::function<void(VmaAllocator)> > &VmaAllocatorsDeletionQueue, ResourceTracker *
-                         AllocationTracker, uint32_t width, uint32_t height);
+                         ResourceTracker *AllocationTracker, uint32_t width, uint32_t height);
 
     // returns diffuse normal material
     std::tuple<VkImageView, VkImageView, VkImageView> GetImageViews();
@@ -81,7 +80,6 @@ private:
     VkImageView m_GBufferMaterialView{};
 
 
-    std::deque<std::function<void(VmaAllocator)> > VmaAllocatorsDeletionQueue;
     ResourceTracker *m_AllocationTracker;
 };
 

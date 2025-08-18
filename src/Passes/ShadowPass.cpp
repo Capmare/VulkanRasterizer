@@ -247,9 +247,7 @@ void ShadowPass::CreateShadowResources(uint32_t Lights,
         m_ShadowImageResource[idx].imageAspectFlags = vk::ImageAspectFlagBits::eDepth;
         m_ShadowImageResource[idx].imageLayout = vk::ImageLayout::eUndefined;
 
-        VmaAllocation allocation = m_ShadowImageResource[idx].allocation;
-        VkImage imageHandle = m_ShadowImageResource[idx].image;
-        VkImageView viewHandle = m_ShadowImageView[idx];
+
 
         deletionQueue.emplace_back([=](VmaAllocator Alloc) {
             tracker->UntrackImageView(m_ShadowImageView[idx]);

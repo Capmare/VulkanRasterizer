@@ -499,7 +499,10 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
     auto fence = m_Device->createFence(fenceInfo);
     m_GraphicsQueue->submit({submitInfo}, fence);
-    m_Device->waitForFences({fence}, true,UINT64_MAX);
+    auto result = m_Device->waitForFences({fence}, true,UINT64_MAX);
+    if (result != vk::Result::eSuccess) {
+        std::cerr << "Failed to wait fences" << std::endl;
+    }
 }
 
 
@@ -565,7 +568,7 @@ void VulkanWindow::InitVulkan() {
             .AddBinding(5, vk::DescriptorType::eUniformBuffer,
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment)
             .AddBinding(6, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment,
-                        m_DirectionalLights.size())
+                        static_cast<uint32_t>(m_DirectionalLights.size()))
             .AddBinding(7, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .AddBinding(8, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eFragment)
             .Build()
@@ -761,7 +764,7 @@ void VulkanWindow::InitVulkan() {
     for (size_t idx = 0; idx < 6; ++idx) {
         imageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
                                                         m_CubemapImage.imageAspectFlags, m_AllocationTracker.get(),
-                                                        "img view " + std::to_string(idx), idx);
+                                                        "img view " + std::to_string(idx), static_cast<uint32_t>(idx));
     }
 
 
@@ -815,7 +818,7 @@ void VulkanWindow::InitVulkan() {
         irrimageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_IrradianceImage.image, m_IrradianceImage.format,
                                                            m_IrradianceImage.imageAspectFlags,
                                                            m_AllocationTracker.get(),
-                                                           "img view " + std::to_string(idx), idx);
+                                                           "img view " + std::to_string(idx), static_cast<uint32_t>(idx));
     }
 
     m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
@@ -894,7 +897,7 @@ void VulkanWindow::InitVulkan() {
         UpdateShadowUBO(static_cast<uint32_t>(idx));
 
 
-        m_ShadowPass->DoPass(idx, m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x),
+        m_ShadowPass->DoPass(static_cast<uint32_t>(idx), m_CurrentFrame, static_cast<uint32_t>(m_ShadowResolution.x),
                              static_cast<uint32_t>(m_ShadowResolution.y));
 
 
@@ -1030,10 +1033,10 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
         m_SwapChainImages[i].imageAspectFlags = vk::ImageAspectFlagBits::eColor;
     }
 
-    m_DepthPass->RecreateImage(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
-                               std::get<1>(m_DepthPass->GetFormat()), width, height);
-    m_GBufferPass->RecreateGBuffer(m_VmaAllocator, m_VmaAllocatorsDeletionQueue, m_AllocationTracker.get(),
-                                   m_SwapChainFactory->Extent.width, m_SwapChainFactory->Extent.height);
+    m_DepthPass->RecreateImage(m_VmaAllocator, m_AllocationTracker.get(), std::get<1>(m_DepthPass->GetFormat()),
+                               width, height);
+    m_GBufferPass->RecreateGBuffer(m_VmaAllocator, m_AllocationTracker.get(), m_SwapChainFactory->Extent.width,
+                                   m_SwapChainFactory->Extent.height);
 
     auto transitionCmd = m_Renderer->CreateCommandBuffer(*m_Device, *m_CmdPool);
     transitionCmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
@@ -1070,7 +1073,11 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
 }
 
 void VulkanWindow::PrepareFrame() {
-    m_Device->waitForFences({*m_RenderFinishedFence}, VK_TRUE, UINT64_MAX);
+    auto result = m_Device->waitForFences({*m_RenderFinishedFence}, VK_TRUE, UINT64_MAX);
+    if (result != vk::Result::eSuccess) {
+        std::cerr << "Failed to wait fences" << std::endl;
+    }
+
     m_Device->resetFences({*m_RenderFinishedFence});
 }
 
@@ -1152,7 +1159,11 @@ void VulkanWindow::PresentFrame(uint32_t imageIndex) const {
     presentInfo.setWaitSemaphores(**m_RenderFinishedSemaphore);
     presentInfo.setSwapchains(**m_SwapChain);
     presentInfo.setImageIndices(imageIndex);
-    m_GraphicsQueue->presentKHR(presentInfo);
+    auto result = m_GraphicsQueue->presentKHR(presentInfo);
+    if (result != vk::Result::eSuccess) {
+        std::cerr << "Failed to present" << std::endl;
+    }
+
 }
 
 void VulkanWindow::CreateSemaphoreAndFences() {

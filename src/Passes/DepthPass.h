@@ -37,8 +37,7 @@ public:
 	void CreateImage(VmaAllocator Allocator, ResourceTracker *AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
 	                 height);
 
-	void RecreateImage(VmaAllocator Allocator, std::deque<std::function<void(VmaAllocator)>> &VmaAllocatorsDeletionQueue, ResourceTracker *
-	                   AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
+	void RecreateImage(VmaAllocator Allocator, ResourceTracker *AllocationTracker, const vk::Format &DepthFormat, uint32_t width, uint32_t
 	                   height);
 
 	void DestroyImages(VmaAllocator Allocator);
