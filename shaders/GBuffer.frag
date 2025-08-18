@@ -40,6 +40,7 @@ layout(set = 1, binding = 2) uniform LightBuffer {
 } lightBuffer;
 
 void main() {
+    // Alpha cutout
     const float alphaThreshold = 0.99;
     vec4 albedoSample = texture(sampler2D(textures[nonuniformEXT(material.Diffuse)], texSampler), inTexCoord);
     if (albedoSample.a < alphaThreshold) discard;
@@ -55,6 +56,7 @@ void main() {
     #endif
 
     mat3 M   = mat3(ubo.model);
+    mat3 Nrm = transpose(inverse(M));
 
     vec3 Nw = normalize(Nrm * inNormal);
     vec3 Tw = normalize(M * inTangent);
