@@ -51,9 +51,7 @@ void main() {
     float ao       = texture(sampler2D(textures[nonuniformEXT(material.AO)],        texSampler), inTexCoord).r;
 
     vec3 n_ts = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), inTexCoord).rgb * 2.0 - 1.0;
-    #ifdef NORMALMAP_DIRECTX
-    n_ts.y = -n_ts.y;
-    #endif
+
 
     mat3 M   = mat3(ubo.model);
     mat3 Nrm = transpose(inverse(M));

@@ -91,14 +91,15 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0){
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-// NOTE: left as-is per prior choice
 vec3 reconstructWorldPos(float depth, mat4 invProj){
-    float z = depth*2.0-1.0;
-    vec4 clipSpacePosition = vec4(inTexCoord*2.0-1.0, depth, 1.0);
-    vec4 viewSpacePosition = invProj * clipSpacePosition;
-    viewSpacePosition /= viewSpacePosition.w;
-    vec4 worldSpacePosition = inverse(ubo.view) * viewSpacePosition;
-    return worldSpacePosition.xyz;
+
+    vec4 ndc = vec4(inTexCoord * 2.0 - 1.0, depth, 1.0);
+    vec4 view = invProj * ndc;
+    view /= view.w;
+    vec4 world = inverse(ubo.view) * view;
+    return world.xyz;
+
+
 }
 
 float sampleShadowPCF_Tent(texture2D img, sampler cmp, vec3 uvz, vec2 texelSize, int radius){
@@ -132,10 +133,10 @@ void main(){
     vec3 albedo    = texture(sampler2D(Diffuse,  texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
     float roughness= texture(sampler2D(Material, texSampler), inTexCoord).g;
+    metallic  = clamp(metallic,  0.0, 1.0);
     roughness = clamp(roughness, 0.04, 1.0);
 
-    vec3 N = texture(sampler2D(Normal, texSampler), inTexCoord).xyz;
-    N = normalize(N);
+    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz);
     vec3 V = normalize(ubo.cameraPos - worldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
@@ -204,7 +205,6 @@ void main(){
                                          vec3(shadowMapUV.xy, shadowMapUV.z),
                                          texelSize, 20);
 
-        // keep darkest (i.e., min visibility across dir lights)
         minVis = min(minVis, vis);
 
         vec3 energy = USE_DIRECT_RADIANCE ? radiance : vec3(1.0);
@@ -233,4 +233,5 @@ void main(){
     color = ToneMapUncharted2(color);
     color = pow(color, vec3(1.0/2.2));
     outColor = vec4(color, 1.0);
+
 }

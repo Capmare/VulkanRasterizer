@@ -101,12 +101,16 @@ std::vector<Mesh> MeshFactory::LoadModelFromGLTF(
                 return -1;
             };
 
-            material.diffuseIdx   = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE);
-            material.normalIdx    = loadTextureIndex(materialPtr, aiTextureType_NORMALS, vk::Format::eR8G8B8A8Unorm);
-            material.metallicIdx  = loadTextureIndex(materialPtr, aiTextureType_METALNESS);
-            material.roughnessIdx = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE_ROUGHNESS);
-            material.aoIdx        = loadTextureIndex(materialPtr, aiTextureType_AMBIENT_OCCLUSION);
-            material.emissiveIdx  = loadTextureIndex(materialPtr, aiTextureType_EMISSIVE);
+            material.diffuseIdx   = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE,          vk::Format::eR8G8B8A8Srgb);
+            material.normalIdx    = loadTextureIndex(materialPtr, aiTextureType_NORMALS,          vk::Format::eR8G8B8A8Unorm);
+
+            material.metallicIdx  = loadTextureIndex(materialPtr, aiTextureType_METALNESS,        vk::Format::eR8G8B8A8Unorm);
+            material.roughnessIdx = loadTextureIndex(materialPtr, aiTextureType_DIFFUSE_ROUGHNESS,vk::Format::eR8G8B8A8Unorm);
+            material.aoIdx        = loadTextureIndex(materialPtr, aiTextureType_AMBIENT_OCCLUSION,vk::Format::eR8G8B8A8Unorm);
+
+            material.emissiveIdx  = loadTextureIndex(materialPtr, aiTextureType_EMISSIVE,         vk::Format::eR8G8B8A8Srgb);
+
+
 
             // Build GPU buffers for mesh
             Mesh meshObj = Build_Mesh(
