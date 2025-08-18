@@ -145,3 +145,7 @@ if (MSVC)
             /external:anglebrackets
     )
 endif()
+
+add_custom_command(POST_BUILD TARGET ${PROJECT_NAME}
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/circus_arena_4k.hdr $<TARGET_FILE_DIR:${PROJECT_NAME}>)
