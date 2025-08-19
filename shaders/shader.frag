@@ -176,7 +176,7 @@ void main() {
     metallic = clamp(metallic, 0.0, 1.0);
     roughness = clamp(roughness, 0.04, 1.0);
 
-    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz) * 2 - 1;
+    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz) ; // this should have * 2 - 1 but with it i get weird artifacts, this only makes the normals be shiny
 
     vec3 V = normalize(ubo.cameraPos - worldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
