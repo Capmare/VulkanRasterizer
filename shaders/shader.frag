@@ -122,7 +122,11 @@ float sampleShadowPCF_Tent(texture2D img, sampler cmp, vec3 uvz, vec2 texelSize,
 
         for (int x = -r; x <= r; x += 2)
         {
+            // This computes a weight for the offset x
             float wx0 = float(r + 1 - abs(x));
+            // This computes the weight for the next sample (x + 1).
+            // If that sample is still inside the filter radius (abs(x+1) <= r), it gets the same triangular weight formula
+            // otherwise 0
             float wx1 = (abs(x + 1) <= r) ? float(r + 1 - abs(x + 1)) : 0.0;
 
             float offx_corner = (float(x) + 0.5) * texelSize.x;
