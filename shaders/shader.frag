@@ -53,11 +53,11 @@ const bool USE_DIRECT_RADIANCE = true;
 const bool USE_IRRADIANCE = true;
 const bool OUTPUT_SHADOWS_ONLY = false;
 
-vec3 Uncharted2Tonemap(vec3 x){
-    float A=0.15,B=0.50,C=0.10,D=0.20,E=0.02,F=0.30;
-    return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+vec3 Uncharted2Tonemap(vec3 x) {
+    float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
-vec3 ToneMapUncharted2(vec3 color){
+vec3 ToneMapUncharted2(vec3 color) {
     float exposure = 2.0; color *= exposure;
     const float W = 11.2;
     vec3 mapped = Uncharted2Tonemap(color);
@@ -65,33 +65,33 @@ vec3 ToneMapUncharted2(vec3 color){
     return mapped * whiteScale;
 }
 
-float DistributionGGX(vec3 N, vec3 H, float roughness){
-    float a=roughness*roughness, a2=a*a;
-    float NdotH=max(dot(N,H),0.0), NdotH2=NdotH*NdotH;
-    float num=a2, denom=(NdotH2*(a2-1.0)+1.0); denom=PI*denom*denom;
-    return num/denom;
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness, a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0), NdotH2 = NdotH * NdotH;
+    float num = a2, denom = (NdotH2 * (a2 - 1.0) + 1.0); denom = PI * denom * denom;
+    return num / denom;
 }
-float GeomtrySchlickGGX_Direct(float NdotV, float roughness){
-    float r=(roughness+1.0), k=(r*r)/8.0;
-    return NdotV / (NdotV*(1.0-k)+k);
+float GeomtrySchlickGGX_Direct(float NdotV, float roughness) {
+    float r = (roughness + 1.0), k = (r * r) / 8.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
 }
-float GeomtrySchlickGGX_Indirect(float NdotV, float roughness){
-    float k=(roughness*roughness)/2.0;
-    return NdotV / (NdotV*(1.0-k)+k);
+float GeomtrySchlickGGX_Indirect(float NdotV, float roughness) {
+    float k = (roughness * roughness) / 2.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
 }
-float GeomtrySmith(vec3 N, vec3 V, vec3 L, float roughness, bool indirectLighting){
-    float NdotV=max(dot(N,V),0.0), NdotL=max(dot(N,L),0.0);
-    float ggx2 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotV,roughness)
-        : GeomtrySchlickGGX_Direct(NdotV,roughness);
-    float ggx1 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotL,roughness)
-        : GeomtrySchlickGGX_Direct(NdotL,roughness);
-    return ggx1*ggx2;
+float GeomtrySmith(vec3 N, vec3 V, vec3 L, float roughness, bool indirectLighting) {
+    float NdotV = max(dot(N, V), 0.0), NdotL = max(dot(N, L), 0.0);
+    float ggx2 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotV, roughness)
+    : GeomtrySchlickGGX_Direct(NdotV, roughness);
+    float ggx1 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotL, roughness)
+    : GeomtrySchlickGGX_Direct(NdotL, roughness);
+    return ggx1 * ggx2;
 }
-vec3 fresnelSchlick(float cosTheta, vec3 F0){
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 reconstructWorldPos(float depth, mat4 invProj){
+vec3 reconstructWorldPos(float depth, mat4 invProj) {
 
     vec4 ndc = vec4(inTexCoord * 2.0 - 1.0, depth, 1.0);
     vec4 view = invProj * ndc;
@@ -102,41 +102,82 @@ vec3 reconstructWorldPos(float depth, mat4 invProj){
 
 }
 
-float sampleShadowPCF_Tent(texture2D img, sampler cmp, vec3 uvz, vec2 texelSize, int radius){
-    float sum=0.0, wsum=0.0;
-    for (int y=-radius; y<=radius; ++y)
-    for (int x=-radius; x<=radius; ++x){
-        float wx=float(radius+1-abs(x)), wy=float(radius+1-abs(y));
-        float w=wx*wy;
-        vec2 off=vec2(x,y)*texelSize;
-        float d=texture(sampler2D(img,cmp), uvz.xy+off).r;
-        sum += w * (uvz.z <= d ? 1.0 : 0.0);
-        wsum += w;
+// PCF tent using textureGather ( this is faster for cpu, yey)
+float sampleShadowPCF_Tent(texture2D img, sampler cmp, vec3 uvz, vec2 texelSize, int r)
+{
+
+    // sum of all tent weights for radius r is (r+1)^4
+    float inv_wsum = 1.0 / float((r + 1) * (r + 1) * (r + 1) * (r + 1));
+    float sum = 0.0;
+
+
+    // move in steps of 2x2
+    for (int y = -r; y <= r; y += 2)
+    {
+        float wy0 = float(r + 1 - abs(y)); // weight for y row
+        float wy1 = (abs(y + 1) <= r) ? float(r + 1 - abs(y + 1)) : 0.0; // weight for y+1 row or 0
+
+        // corner of two texels so the future texture gather can see both rows, (idea from gp1 when i did soft shadows)
+        float offy_corner = (float(y) + 0.5) * texelSize.y;
+
+        for (int x = -r; x <= r; x += 2)
+        {
+            float wx0 = float(r + 1 - abs(x));
+            float wx1 = (abs(x + 1) <= r) ? float(r + 1 - abs(x + 1)) : 0.0;
+
+            float offx_corner = (float(x) + 0.5) * texelSize.x;
+
+
+            // we gather ath the corner of the following texels:
+            // (x,y), (x+1,y), (x,y+1), (x+1,y+1)
+
+            // add offset to center of UV to be between 4 texels
+            vec2 p = uvz.xy + vec2(offx_corner, offy_corner);
+
+
+            // https://registry.khronos.org/OpenGL-Refpages/gl4/html/textureGather.xhtml
+            vec4 d4 = textureGather(sampler2D(img, cmp), p, 0);
+
+            // Branchless compare -> same as in unreal step node, good for compare!!!! // https://gamedev.stackexchange.com/questions/201792/what-does-the-step-node-do-in-unreal-engine
+            vec4 v4 = step(vec4(uvz.z), d4);
+
+            // Tent weights for the 2×2 taps, IMPORTANT: row weight × column weight FROM ABOVE ^
+            float w00 = wx0 * wy0; // (x,y)
+            float w10 = wx1 * wy0; // (x+1,y)
+            float w01 = wx0 * wy1; // (x,y+1)
+            float w11 = wx1 * wy1; // (x+1,y+1)
+
+            // Accumulate in same order as above, use dot because it does the v4.x*w00 + v4.y*w10 + v4.z*w01 + v4.w*w11
+            sum += dot(v4, vec4(w00, w10, w01, w11));
+        }
     }
-    return sum/wsum;
+    // normalize to 0 - 1
+    return sum * inv_wsum;
 }
 
-void main(){
+
+void main() {
     float depth = texelFetch(sampler2D(Depth, texSampler), ivec2(gl_FragCoord.xy), 0).r;
     vec3 worldPos = reconstructWorldPos(depth, inverse(ubo.proj));
 
-    if (depth >= 1.0){
-        if (OUTPUT_SHADOWS_ONLY){
-            outColor = vec4(0.0,0.0,0.0,1.0);
+    if (depth >= 1.0) {
+        if (OUTPUT_SHADOWS_ONLY) {
+            outColor = vec4(0.0, 0.0, 0.0, 1.0);
             return;
         }
         const vec3 sampleDirection = normalize(worldPos.xyz);
-        outColor = vec4(texture(samplerCube(EnviromentMap,texSampler), sampleDirection).rgb, 1.0);
+        outColor = vec4(texture(samplerCube(EnviromentMap, texSampler), sampleDirection).rgb, 1.0);
         return;
     }
 
-    vec3 albedo    = texture(sampler2D(Diffuse,  texSampler), inTexCoord).rgb;
+    vec3 albedo = texture(sampler2D(Diffuse, texSampler), inTexCoord).rgb;
     float metallic = texture(sampler2D(Material, texSampler), inTexCoord).r;
-    float roughness= texture(sampler2D(Material, texSampler), inTexCoord).g;
-    metallic  = clamp(metallic,  0.0, 1.0);
+    float roughness = texture(sampler2D(Material, texSampler), inTexCoord).g;
+    metallic = clamp(metallic, 0.0, 1.0);
     roughness = clamp(roughness, 0.04, 1.0);
 
-    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz) ;
+    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz) * 2 - 1;
+
     vec3 V = normalize(ubo.cameraPos - worldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
@@ -147,27 +188,27 @@ void main(){
 
     float minVis = 1.0;
 
-    for (int i=0; i<int(MAX_POINT_LIGHTS); ++i){
+    for (int i = 0; i < int(MAX_POINT_LIGHTS); ++i) {
         vec3 lightPos = pointLightBuffer.pointLights[i].Position.xyz;
         vec3 L = normalize(lightPos - worldPos);
         vec3 H = normalize(V + L);
 
         float distance = length(lightPos - worldPos);
-        float attenuation = 1.0 / max(distance*distance, 0.0001);
+        float attenuation = 1.0 / max(distance * distance, 0.0001);
         vec3 radiance = pointLightBuffer.pointLights[i].Color.xyz
         * pointLightBuffer.pointLights[i].Color.w * attenuation;
 
-        vec3 F = fresnelSchlick(max(dot(H,V),0.0), F0);
-        float NDF = DistributionGGX(N,H,roughness);
-        float G   = GeomtrySmith(N,V,L,roughness,false);
-        vec3 numerator = NDF*G*F;
-        float denominator = max(4.0*max(dot(N,V),0.0)*max(dot(N,L),0.0), 0.001);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeomtrySmith(N, V, L, roughness, false);
+        vec3 numerator = NDF * G * F;
+        float denominator = max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), 0.001);
         vec3 specular = numerator / denominator;
 
         vec3 kS = F;
-        vec3 kD = (vec3(1.0)-kS) * (1.0 - metallic);
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-        float NdotL = max(dot(N,L),0.0);
+        float NdotL = max(dot(N, L), 0.0);
         vec3 energy = USE_DIRECT_RADIANCE ? radiance : vec3(1.0);
 
         Lo += (kD * albedo / PI + specular) * energy * NdotL;
@@ -176,26 +217,26 @@ void main(){
         lightCount += 1.0;
     }
 
-    for (int i=0; i<int(MAX_DIRECTIONAL_LIGHTS); ++i){
+    for (int i = 0; i < int(MAX_DIRECTIONAL_LIGHTS); ++i) {
         vec3 L = normalize(-dirLightBuffer.dirLights[i].Direction.xyz);
         vec3 H = normalize(V + L);
         vec3 radiance = dirLightBuffer.dirLights[i].Color.xyz
         * dirLightBuffer.dirLights[i].Color.w;
 
-        vec3 F = fresnelSchlick(max(dot(H,V),0.0), F0);
-        float NDF = DistributionGGX(N,H,roughness);
-        float G   = GeomtrySmith(N,V,L,roughness,true);
-        vec3 numerator = NDF*G*F;
-        float denominator = max(4.0*max(dot(N,V),0.0)*max(dot(N,L),0.0), 0.001);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeomtrySmith(N, V, L, roughness, true);
+        vec3 numerator = NDF * G * F;
+        float denominator = max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), 0.001);
         vec3 specular = numerator / denominator;
 
         vec3 kS = F;
-        vec3 kD = (vec3(1.0)-kS) * (1.0 - metallic);
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-        float NdotL = max(dot(N,L),0.0);
+        float NdotL = max(dot(N, L), 0.0);
 
         // Shadowing
-        vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos,1.0);
+        vec4 lightSpacePosition = shadowUbo.proj * shadowUbo.view * vec4(worldPos, 1.0);
         lightSpacePosition /= lightSpacePosition.w;
         vec3 shadowMapUV = vec3(lightSpacePosition.xy * 0.5 + 0.5, lightSpacePosition.z);
 
@@ -215,20 +256,20 @@ void main(){
         lightCount += 1.0;
     }
 
-    if (OUTPUT_SHADOWS_ONLY){
+    if (OUTPUT_SHADOWS_ONLY) {
         float shadowMask = 1.0 - minVis;
         outColor = vec4(vec3(shadowMask), 1.0);
         return;
     }
 
     vec3 ambient = vec3(0.0);
-    if (USE_IRRADIANCE){
+    if (USE_IRRADIANCE) {
 
 
 
 
 
-        vec3 irradiance = texture(samplerCube(irradianceMap, texSampler), vec3(N.x,-N.y,N.z)).rgb;
+        vec3 irradiance = texture(samplerCube(irradianceMap, texSampler), vec3(N.x, -N.y, N.z)).rgb;
         vec3 diffuseIBL = irradiance * albedo;
         vec3 kD_avg = (lightCount > 0.0) ? (kD_sum / lightCount) : vec3(1.0 - metallic);
         const float exposureCompensation = 1.0;
@@ -240,7 +281,7 @@ void main(){
 
     vec3 color = ambient + Lo;
     color = ToneMapUncharted2(color);
-    color = pow(color, vec3(1.0/2.2));
+    color = pow(color, vec3(1.0 / 2.2));
     outColor = vec4(color, 1.0);
 
 }

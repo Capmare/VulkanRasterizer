@@ -24,6 +24,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 
 void main() {
         vec4 worldPos = ubo.model * vec4(inWorldPos, 1.0);
+
         gl_Position = ubo.proj * ubo.view * worldPos;
 
         outColor = inColor;

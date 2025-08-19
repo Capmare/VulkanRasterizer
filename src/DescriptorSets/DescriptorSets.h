@@ -17,8 +17,7 @@ class DescriptorSets {
     public:
     DescriptorSets(const vk::raii::Device& Device) : m_Device(Device) {
     };
-    virtual ~DescriptorSets() {
-    };
+    virtual ~DescriptorSets() = default;
 
     DescriptorSets(const DescriptorSets&) = delete;
     DescriptorSets(DescriptorSets&&) noexcept = delete;

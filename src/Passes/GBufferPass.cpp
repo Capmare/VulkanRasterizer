@@ -178,7 +178,7 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
         imageInfo.extent = extent;
         imageInfo.mipLevels = 1;
         imageInfo.arrayLayers = 1;
-        imageInfo.format = vk::Format::eR8G8B8A8Srgb;
+        imageInfo.format = vk::Format::eR8G8B8A8Unorm;
         imageInfo.tiling = vk::ImageTiling::eOptimal;
         imageInfo.initialLayout = vk::ImageLayout::eUndefined;
         imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled;
@@ -195,7 +195,7 @@ void GBufferPass::CreateGBuffer(VmaAllocator Allocator,
     m_GBufferNormalsView = ImageFactory::CreateImageView(m_Device, m_GBufferNormals.image, vk::Format::eR8G8B8A8Unorm,
                                                          vk::ImageAspectFlagBits::eColor, AllocationTracker,
                                                          "GBufferNormalsView");
-    m_GBufferMaterialView = ImageFactory::CreateImageView(m_Device, m_GBufferMaterial.image, vk::Format::eR8G8B8A8Srgb,
+    m_GBufferMaterialView = ImageFactory::CreateImageView(m_Device, m_GBufferMaterial.image, vk::Format::eR8G8B8A8Unorm,
                                                           vk::ImageAspectFlagBits::eColor, AllocationTracker,
                                                           "GBufferMaterialView");
 
@@ -336,7 +336,7 @@ void GBufferPass::CreatePipeline(uint32_t ImageResourceSize, const vk::Format &D
     std::vector<vk::Format> gbufferFormats = {
         vk::Format::eR8G8B8A8Srgb, // Diffuse
         vk::Format::eR8G8B8A8Unorm, // Normals
-        vk::Format::eR8G8B8A8Srgb // Material
+        vk::Format::eR8G8B8A8Unorm // Material
     };
 
 

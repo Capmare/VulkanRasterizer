@@ -53,16 +53,9 @@ void main() {
     vec3 n_ts = texture(sampler2D(textures[nonuniformEXT(material.Normal)], texSampler), inTexCoord).rgb * 2.0 - 1.0;
 
 
-    mat3 M   = mat3(ubo.model);
-    mat3 Nrm = transpose(inverse(M));
-
-    vec3 Nw = normalize(Nrm * inNormal);
-    vec3 Tw = normalize(M * inTangent);
-    Tw = normalize(Tw - Nw * dot(Tw, Nw));
-    vec3 Braw = normalize(M * inBitangent);
-    float handed = sign(dot(cross(Nw, Tw), Braw));
-    vec3 Bw = normalize(cross(Nw, Tw)) * handed;
-
+    vec3 Tw = normalize(inTangent);
+    vec3 Bw = normalize(inBitangent);
+    vec3 Nw = normalize(inNormal);
     mat3 TBN = mat3(Tw, Bw, Nw);
 
     vec3 worldNormal = normalize(TBN * n_ts);
