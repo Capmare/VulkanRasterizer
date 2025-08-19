@@ -36,6 +36,7 @@ void DescriptorSets::CreateFrameDescriptorSet(
     FrameAllocInfo.descriptorSetCount = 2;
     FrameAllocInfo.pSetLayouts = FrameDescriptorSetLayoutArr;
 
+
     auto dev = *m_Device;
     m_FrameDescriptorSets = dev.allocateDescriptorSets(FrameAllocInfo);
 
@@ -208,6 +209,7 @@ void DescriptorSets::CreateDescriptorPool(uint32_t DirectionalLights) {
     poolInfo.maxSets = 4;
     poolInfo.poolSizeCount = 3;
     poolInfo.pPoolSizes = PoolSizeArr;
+    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
 
     m_Device.waitIdle();
     auto dev = *m_Device;
