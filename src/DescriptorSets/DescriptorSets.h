@@ -18,7 +18,6 @@ class DescriptorSets {
     DescriptorSets(const vk::raii::Device& Device) : m_Device(Device) {
     };
     virtual ~DescriptorSets() {
-        vkDestroyDescriptorPool(*m_Device,m_DescriptorPool,nullptr);
     };
 
     DescriptorSets(const DescriptorSets&) = delete;

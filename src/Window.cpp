@@ -71,6 +71,8 @@ void VulkanWindow::MainLoop() {
 
 void VulkanWindow::Cleanup() {
     // Destroy depth image first (RAII)
+
+
     m_DepthImageFactory.reset();
 
     m_GBufferPass->DestroyImages(m_VmaAllocator);
@@ -94,6 +96,8 @@ void VulkanWindow::Cleanup() {
 
     m_SwapChainFactory.reset();
     m_SwapChain->clear();
+
+    vkDestroyDescriptorPool(**m_Device, m_DescriptorSets->GetPool(), nullptr);
 
     vkDestroySurfaceKHR(**m_Instance, m_Surface, nullptr);
     glfwDestroyWindow(m_Window);
@@ -422,29 +426,26 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
 
     ImageFactory::ShiftImageLayout(
-    cmd,
-    inImage,
-    vk::ImageLayout::eReadOnlyOptimal,
-    vk::AccessFlagBits::eNone,
-    vk::AccessFlagBits::eColorAttachmentRead,
-    vk::PipelineStageFlagBits::eNone,
-    vk::PipelineStageFlagBits::eColorAttachmentOutput, inLayerCount
-);
+        cmd,
+        inImage,
+        vk::ImageLayout::eReadOnlyOptimal,
+        vk::AccessFlagBits::eNone,
+        vk::AccessFlagBits::eColorAttachmentRead,
+        vk::PipelineStageFlagBits::eNone,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput, inLayerCount
+    );
 
     ImageFactory::ShiftImageLayout(
-    cmd,
-    outImage,
-    vk::ImageLayout::eColorAttachmentOptimal,
-    vk::AccessFlagBits::eNone,
-    vk::AccessFlagBits::eColorAttachmentWrite,
-    vk::PipelineStageFlagBits::eNone,
-    vk::PipelineStageFlagBits::eColorAttachmentOutput, 6
-);
+        cmd,
+        outImage,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::AccessFlagBits::eNone,
+        vk::AccessFlagBits::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits::eNone,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput, 6
+    );
 
     for (uint32_t idx = 0; idx < 6; idx++) {
-
-
-
         vk::RenderingAttachmentInfo RenderAttchInfo{};
         RenderAttchInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
         RenderAttchInfo.imageView = outImageViews[idx];
@@ -473,7 +474,8 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
 
         cmd.beginRendering(RenderingInfo);
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, GraphicsPipeline);
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {}); // here it expects the image to be in readonly optimal
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, hppDs, {});
+        // here it expects the image to be in readonly optimal
 
         cmd.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0,
                           vk::ArrayProxy<const glm::mat4>{captureViews[idx]});
@@ -487,14 +489,14 @@ void VulkanWindow::RenderToCubemap(const std::vector<vk::ShaderModule> &Shader, 
     }
 
     ImageFactory::ShiftImageLayout(
-    cmd,
-    outImage,
-    vk::ImageLayout::eShaderReadOnlyOptimal,
-    vk::AccessFlagBits::eColorAttachmentWrite,
-    vk::AccessFlagBits::eNone,
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
-    vk::PipelineStageFlagBits::eNone, 6
-);
+        cmd,
+        outImage,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::AccessFlagBits::eColorAttachmentWrite,
+        vk::AccessFlagBits::eNone,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits::eNone, 6
+    );
 
     cmd.end();
 
@@ -828,7 +830,8 @@ void VulkanWindow::InitVulkan() {
         irrimageviews[idx] = ImageFactory::CreateImageView(*m_Device, m_IrradianceImage.image, m_IrradianceImage.format,
                                                            m_IrradianceImage.imageAspectFlags,
                                                            m_AllocationTracker.get(),
-                                                           "img view " + std::to_string(idx), static_cast<uint32_t>(idx));
+                                                           "img view " + std::to_string(idx),
+                                                           static_cast<uint32_t>(idx));
     }
 
     m_CubemapImageView = ImageFactory::CreateImageView(*m_Device, m_CubemapImage.image, m_CubemapImage.format,
@@ -1063,17 +1066,74 @@ void VulkanWindow::HandleFramebufferResize(int width, int height) {
     m_GraphicsQueue->waitIdle();
 
 
-    m_DescriptorSets->CreateDescriptorPool(static_cast<uint32_t>(m_DirectionalLights.size()));
-    m_DescriptorSets->CreateGlobalDescriptorSet(
-        **m_GlobalDescriptorSetLayout, *m_Sampler,
-        std::make_pair(m_PointLightBufferInfo, static_cast<uint32_t>(m_PointLights.size())),
-        std::make_pair(m_DirectionalLightBufferInfo, static_cast<uint32_t>(m_DirectionalLights.size())),
-        m_ImageResource,
-        m_SwapChainImageViews, m_ShadowPass->GetSampler()
-    );
-    m_DescriptorSets->CreateFrameDescriptorSet(*m_FrameDescriptorSetLayout, m_GBufferPass->GetImageViews(),
-                                               m_DepthPass->GetImageView(), m_UniformBufferInfo, m_ShadowUBOBufferInfo,
-                                               m_ShadowPass->GetImageView(), m_CubemapImageView, m_IrradianceImageView);
+    auto [diffuse, normal, material] = m_GBufferPass->GetImageViews();
+
+    vk::DescriptorImageInfo DiffuseImageInfo{};
+    DiffuseImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    DiffuseImageInfo.imageView = diffuse;
+    DiffuseImageInfo.sampler = nullptr;
+
+    vk::DescriptorImageInfo NormalImageInfo{};
+    NormalImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    NormalImageInfo.imageView = normal;
+    NormalImageInfo.sampler = nullptr;
+
+    vk::DescriptorImageInfo MaterialImageInfo{};
+    MaterialImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    MaterialImageInfo.imageView = material;
+    MaterialImageInfo.sampler = nullptr;
+
+    vk::DescriptorImageInfo DepthImageInfo{};
+    DepthImageInfo.imageLayout = vk::ImageLayout::eDepthReadOnlyOptimal;
+    DepthImageInfo.imageView = m_DepthPass->GetImageView();
+    DepthImageInfo.sampler = nullptr;
+
+
+    auto ds = m_DescriptorSets->GetFrameDescriptorSet(m_CurrentFrame).second;
+
+    std::vector<vk::WriteDescriptorSet> writes;
+    // Diffuse texture
+    vk::WriteDescriptorSet writeDiffuse{};
+    writeDiffuse.dstSet = ds;
+    writeDiffuse.dstBinding = 1;
+    writeDiffuse.dstArrayElement = 0;
+    writeDiffuse.descriptorCount = 1;
+    writeDiffuse.descriptorType = vk::DescriptorType::eSampledImage;
+    writeDiffuse.pImageInfo = &DiffuseImageInfo;
+    writes.push_back(writeDiffuse);
+
+    // Normal texture
+    vk::WriteDescriptorSet writeNormal{};
+    writeNormal.dstSet = ds;
+    writeNormal.dstBinding = 2;
+    writeNormal.dstArrayElement = 0;
+    writeNormal.descriptorCount = 1;
+    writeNormal.descriptorType = vk::DescriptorType::eSampledImage;
+    writeNormal.pImageInfo = &NormalImageInfo;
+    writes.push_back(writeNormal);
+
+    // Material texture
+    vk::WriteDescriptorSet writeMaterial{};
+    writeMaterial.dstSet = ds;
+    writeMaterial.dstBinding = 3;
+    writeMaterial.dstArrayElement = 0;
+    writeMaterial.descriptorCount = 1;
+    writeMaterial.descriptorType = vk::DescriptorType::eSampledImage;
+    writeMaterial.pImageInfo = &MaterialImageInfo;
+    writes.push_back(writeMaterial);
+
+    // Depth texture
+    vk::WriteDescriptorSet writeDepth{};
+    writeDepth.dstSet = ds;
+    writeDepth.dstBinding = 4;
+    writeDepth.dstArrayElement = 0;
+    writeDepth.descriptorCount = 1;
+    writeDepth.descriptorType = vk::DescriptorType::eSampledImage;
+    writeDepth.pImageInfo = &DepthImageInfo;
+    writes.push_back(writeDepth);
+
+    m_Device->updateDescriptorSets(writes, {});
+
 
     m_GBufferPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
     m_DepthPass->m_DescriptorSets = m_DescriptorSets->GetDescriptorSets(m_CurrentFrame);
@@ -1173,7 +1233,6 @@ void VulkanWindow::PresentFrame(uint32_t imageIndex) const {
     if (result != vk::Result::eSuccess) {
         std::cerr << "Failed to present" << std::endl;
     }
-
 }
 
 void VulkanWindow::CreateSemaphoreAndFences() {

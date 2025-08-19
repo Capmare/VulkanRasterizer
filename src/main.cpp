@@ -10,6 +10,7 @@ int main()
 
 	VulkanWindow Window{Context};
 
+
 	try
 	{
 		Window.Run();

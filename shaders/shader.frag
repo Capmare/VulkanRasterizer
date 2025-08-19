@@ -82,9 +82,9 @@ float GeomtrySchlickGGX_Indirect(float NdotV, float roughness){
 float GeomtrySmith(vec3 N, vec3 V, vec3 L, float roughness, bool indirectLighting){
     float NdotV=max(dot(N,V),0.0), NdotL=max(dot(N,L),0.0);
     float ggx2 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotV,roughness)
-    : GeomtrySchlickGGX_Direct(NdotV,roughness);
+        : GeomtrySchlickGGX_Direct(NdotV,roughness);
     float ggx1 = indirectLighting ? GeomtrySchlickGGX_Indirect(NdotL,roughness)
-    : GeomtrySchlickGGX_Direct(NdotL,roughness);
+        : GeomtrySchlickGGX_Direct(NdotL,roughness);
     return ggx1*ggx2;
 }
 vec3 fresnelSchlick(float cosTheta, vec3 F0){
@@ -136,9 +136,10 @@ void main(){
     metallic  = clamp(metallic,  0.0, 1.0);
     roughness = clamp(roughness, 0.04, 1.0);
 
-    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz);
+    vec3 N = normalize(texture(sampler2D(Normal, texSampler), inTexCoord).xyz) ;
     vec3 V = normalize(ubo.cameraPos - worldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
 
     vec3 Lo = vec3(0.0);
     vec3 kD_sum = vec3(0.0);
@@ -222,11 +223,19 @@ void main(){
 
     vec3 ambient = vec3(0.0);
     if (USE_IRRADIANCE){
-        vec3 irradiance = normalize(texture(samplerCube(irradianceMap, texSampler), N).rgb);
+
+
+
+
+
+        vec3 irradiance = texture(samplerCube(irradianceMap, texSampler), vec3(N.x,-N.y,N.z)).rgb;
         vec3 diffuseIBL = irradiance * albedo;
         vec3 kD_avg = (lightCount > 0.0) ? (kD_sum / lightCount) : vec3(1.0 - metallic);
         const float exposureCompensation = 1.0;
         ambient = kD_avg * diffuseIBL * exposureCompensation;
+
+
+
     }
 
     vec3 color = ambient + Lo;
